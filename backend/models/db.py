@@ -51,9 +51,11 @@ _DATABASE_URL: str = os.getenv(
 
 engine: AsyncEngine = create_async_engine(
     _DATABASE_URL,
-    echo=False,          # set True temporarily to debug SQL
+    echo=False,   # set True temporarily to log SQL statements
     future=True,
-    connect_args={"check_same_thread": False},  # required for SQLite
+    # NOTE: do NOT pass connect_args={"check_same_thread": False} here.
+    # aiosqlite manages its own thread internally; that kwarg is only valid
+    # for the synchronous sqlite3 driver and raises TypeError with aiosqlite.
 )
 
 # ---------------------------------------------------------------------------

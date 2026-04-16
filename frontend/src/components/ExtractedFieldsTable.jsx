@@ -1,12 +1,15 @@
 /**
  * ExtractedFieldsTable.jsx
  * -------------------------
- * Renders all extracted claim fields in a clean two-column table.
- * Mandatory fields are marked with a ✓/✗ indicator.
- * Optional absent fields are shown as a muted dash.
+ * Two-column responsive grid of extracted insurance claim fields.
+ *
+ * Props
+ * -----
+ * fields        : object    — full extraction dict from the API
+ * missingFields : string[]  — keys of missing mandatory fields (highlighted red)
  */
 
-import { CheckCircle, XCircle } from 'lucide-react'
+import { XCircle, CheckCircle2, MinusCircle } from 'lucide-react'
 
 const MANDATORY = new Set([
   'claim_number',
@@ -18,116 +21,165 @@ const MANDATORY = new Set([
   'estimated_damage',
 ])
 
-const FIELD_LABELS = {
-  claim_number:          'Claim Number',
-  claimant_name:         'Claimant Name',
-  policy_number:         'Policy Number',
-  incident_date:         'Incident Date',
-  incident_description:  'Description',
-  claim_type:            'Claim Type',
-  estimated_damage:      'Estimated Damage',
-  contact_phone:         'Phone',
-  contact_email:         'Email',
-  witness_info:          'Witness Info',
-  police_report_number:  'Police Report #',
-  supporting_docs:       'Supporting Docs',
-}
+const FIELD_META = [
+  { key: 'claim_number',         label: 'Claim Number' },
+  { key: 'claimant_name',        label: 'Claimant Name' },
+  { key: 'policy_number',        label: 'Policy Number' },
+  { key: 'incident_date',        label: 'Incident Date' },
+  { key: 'claim_type',           label: 'Claim Type' },
+  { key: 'estimated_damage',     label: 'Estimated Damage' },
+  { key: 'incident_description', label: 'Description' },
+  { key: 'contact_phone',        label: 'Phone' },
+  { key: 'contact_email',        label: 'Email' },
+  { key: 'police_report_number', label: 'Police Report #' },
+  { key: 'witness_info',         label: 'Witness Info' },
+  { key: 'supporting_docs',      label: 'Supporting Docs' },
+]
 
-function isMissing(value) {
+/* ─── Helpers ─────────────────────────────────────────────────────────── */
+
+function isEmpty(value) {
   if (value === null || value === undefined) return true
-  if (typeof value === 'string') return value.trim() === '' || ['null','none','unknown','n/a'].includes(value.trim().toLowerCase())
+  if (typeof value === 'string') {
+    const lc = value.trim().toLowerCase()
+    return !value.trim() || ['null', 'none', 'unknown', 'n/a', 'na'].includes(lc)
+  }
   if (Array.isArray(value)) return value.length === 0
   return false
 }
 
 function formatValue(key, value) {
-  if (isMissing(value)) return null
+  if (isEmpty(value)) return null
+
+  // Currency for damage
   if (key === 'estimated_damage') {
-    const num = parseFloat(value)
-    return isNaN(num) ? String(value) : `$${num.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+    const n = parseFloat(String(value).replace(/[,$€£¥]/g, ''))
+    if (!isNaN(n)) {
+      return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
+    }
   }
+
+  // Array → comma list
   if (Array.isArray(value)) return value.join(', ')
+
+  // Capitalize claim type
+  if (key === 'claim_type') {
+    return String(value).charAt(0).toUpperCase() + String(value).slice(1)
+  }
+
   return String(value)
 }
+
+/* ─── Single field card ────────────────────────────────────────────────── */
+
+function FieldCard({ label, fieldKey, value, isMissing, isMandatory }) {
+  const formatted = formatValue(fieldKey, value)
+  const empty     = formatted === null
+
+  const containerClass = isMissing
+    ? 'bg-red-950/30 border-red-500/25 ring-1 ring-red-500/10'
+    : 'bg-white/[0.025] border-white/[0.06]'
+
+  return (
+    <div className={`rounded-xl border px-4 py-3.5 flex flex-col gap-1 transition-colors ${containerClass}`}>
+      {/* Label row */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+          {label}
+          {isMandatory && (
+            <span className={`ml-1.5 ${isMissing ? 'text-red-600' : 'text-slate-700'}`}>*</span>
+          )}
+        </span>
+
+        {/* Status icon — only for mandatory fields */}
+        {isMandatory && (
+          isMissing
+            ? <XCircle size={14} className="text-red-500 shrink-0" />
+            : <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+        )}
+        {!isMandatory && empty && (
+          <MinusCircle size={13} className="text-slate-700 shrink-0" />
+        )}
+      </div>
+
+      {/* Value */}
+      {empty ? (
+        <p className="text-xs italic text-slate-600">Not found</p>
+      ) : (
+        <p
+          className={`
+            text-sm font-medium leading-snug break-words
+            ${isMissing ? 'text-red-300' : 'text-white'}
+            ${fieldKey === 'incident_description' ? 'text-xs leading-relaxed font-normal text-slate-300' : ''}
+            ${fieldKey === 'estimated_damage' && !isMissing ? 'text-emerald-300 font-bold text-base' : ''}
+          `}
+        >
+          {formatted}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/* ─── Main component ───────────────────────────────────────────────────── */
 
 export default function ExtractedFieldsTable({ fields = {}, missingFields = [] }) {
   const missingSet = new Set(missingFields)
 
+  // Put missing fields first, then mandatory, then optional
+  const sorted = [...FIELD_META].sort((a, b) => {
+    const aMissing = missingSet.has(a.key) ? 0 : 1
+    const bMissing = missingSet.has(b.key) ? 0 : 1
+    if (aMissing !== bMissing) return aMissing - bMissing
+    const aMand = MANDATORY.has(a.key) ? 0 : 1
+    const bMand = MANDATORY.has(b.key) ? 0 : 1
+    return aMand - bMand
+  })
+
+  // Description spans full width — pull it out
+  const descIndex  = sorted.findIndex(f => f.key === 'incident_description')
+  const descItem   = descIndex > -1 ? sorted.splice(descIndex, 1)[0] : null
+
   return (
-    <div className="overflow-hidden rounded-xl border border-white/5">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-white/[0.03] border-b border-white/5">
-            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider w-2/5">
-              Field
-            </th>
-            <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Value
-            </th>
-            <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider w-12">
-              OK
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.entries(FIELD_LABELS).map(([key, label], i) => {
-            const raw      = fields[key]
-            const missing  = missingSet.has(key) || isMissing(raw)
-            const mandatory = MANDATORY.has(key)
-            const formatted = formatValue(key, raw)
+    <div className="space-y-3">
+      {/* Grid fields */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {sorted.map(({ key, label }) => (
+          <FieldCard
+            key={key}
+            fieldKey={key}
+            label={label}
+            value={fields[key]}
+            isMissing={missingSet.has(key)}
+            isMandatory={MANDATORY.has(key)}
+          />
+        ))}
+      </div>
 
-            return (
-              <tr
-                key={key}
-                className={`
-                  border-b border-white/[0.04] transition-colors
-                  ${i % 2 === 0 ? '' : 'bg-white/[0.015]'}
-                  hover:bg-white/[0.035]
-                `}
-              >
-                {/* Label */}
-                <td className="px-4 py-3 font-medium text-slate-400 whitespace-nowrap">
-                  {label}
-                  {mandatory && (
-                    <span className="ml-1.5 text-[9px] font-bold text-slate-600 uppercase tracking-wider">
-                      req
-                    </span>
-                  )}
-                </td>
+      {/* Description — full width */}
+      {descItem && (
+        <FieldCard
+          key="incident_description"
+          fieldKey="incident_description"
+          label={descItem.label}
+          value={fields['incident_description']}
+          isMissing={missingSet.has('incident_description')}
+          isMandatory={true}
+        />
+      )}
 
-                {/* Value */}
-                <td className="px-4 py-3 max-w-xs">
-                  {formatted ? (
-                    <span
-                      className={`
-                        break-words
-                        ${key === 'incident_description'
-                          ? 'text-slate-300 text-xs leading-relaxed'
-                          : 'text-white font-medium'}
-                      `}
-                    >
-                      {formatted}
-                    </span>
-                  ) : (
-                    <span className="text-slate-600 italic text-xs">—</span>
-                  )}
-                </td>
-
-                {/* Status icon */}
-                <td className="px-4 py-3 text-right">
-                  {mandatory ? (
-                    missing
-                      ? <XCircle size={16} className="text-red-500 inline" />
-                      : <CheckCircle size={16} className="text-emerald-500 inline" />
-                  ) : (
-                    <span className="text-slate-700 text-xs">opt</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {/* Legend */}
+      <div className="flex items-center gap-4 pt-1">
+        <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
+          <CheckCircle2 size={11} className="text-emerald-600" /> Mandatory extracted
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
+          <XCircle size={11} className="text-red-600" /> Mandatory missing
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
+          <MinusCircle size={11} className="text-slate-700" /> Optional absent
+        </span>
+      </div>
     </div>
   )
 }

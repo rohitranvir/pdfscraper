@@ -1,42 +1,55 @@
 /**
  * ClaimsProcessor.jsx
  * --------------------
- * Main page — PDF upload, pipeline controls, and results display.
+ * Main claims processing page.
  *
- * Flow
- * ----
- * 1. User drops/selects a PDF  OR  clicks "Run Test Sample"
- * 2. On submit → POST /api/claims/process (or /test)
- * 3. Loading spinner while awaiting response
- * 4. ResultsPanel renders the ClaimResponse JSON
+ * State machine
+ * -------------
+ *  idle      → user drops PDF or clicks test
+ *  loading   → API in flight  → show LoadingSpinner (replaces buttons)
+ *  results   → success        → show ResultsPanel + "Process Another" button
+ *  error     → API failure    → show red error card + retry controls
  */
 
 import { useState, useCallback } from 'react'
-import { UploadCloud, FlaskConical, RotateCcw } from 'lucide-react'
-import { processClaim, testClaim } from '../api'
-import DropZone from '../components/DropZone'
-import ResultsPanel from '../components/ResultsPanel'
+import { UploadCloud, FlaskConical, RotateCcw, AlertCircle } from 'lucide-react'
+import { processClaim, testClaim }  from '../api'
+import DropZone      from '../components/DropZone'
+import ResultsPanel  from '../components/ResultsPanel'
 import LoadingSpinner from '../components/LoadingSpinner'
 
+/* ═══════════════════════════════════════════════════════════════════════ */
+
 export default function ClaimsProcessor() {
-  const [file,    setFile]    = useState(null)
-  const [result,  setResult]  = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
+  const [file,      setFile]      = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [results,   setResults]   = useState(null)
+  const [error,     setError]     = useState('')
+
+  /* ── Handlers ────────────────────────────────────────────────────────── */
+
+  const handleFileSelect = useCallback((f) => {
+    setFile(f)
+    setError('')
+    // Clear previous results when a new file is chosen
+    if (f) setResults(null)
+  }, [])
 
   const reset = useCallback(() => {
     setFile(null)
-    setResult(null)
+    setResults(null)
     setError('')
+    setIsLoading(false)
   }, [])
 
-  const run = useCallback(async (mode) => {
-    setLoading(true)
+  const submit = useCallback(async (mode) => {
+    setIsLoading(true)
     setError('')
-    setResult(null)
+    setResults(null)
 
     try {
       let data
+
       if (mode === 'test') {
         data = await testClaim()
       } else {
@@ -44,70 +57,96 @@ export default function ClaimsProcessor() {
         formData.append('file', file)
         data = await processClaim(formData)
       }
-      setResult(data)
+
+      setResults(data)
     } catch (err) {
-      setError(err.message || 'Processing failed. Check the backend is running.')
+      setError(
+        err.message ||
+        'Processing failed. Make sure the backend is running on port 8000.'
+      )
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }, [file])
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     RENDER
+  ═══════════════════════════════════════════════════════════════════════ */
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-      {/* ── Page header ───────────────────────────────────────────────── */}
+
+      {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white tracking-tight">
           Claims Processor
         </h1>
-        <p className="text-slate-400 mt-1.5 text-sm">
-          Upload an FNOL or insurance PDF — AI extracts fields, detects gaps,
-          and routes the claim automatically.
+        <p className="text-slate-400 mt-1.5 text-sm max-w-xl">
+          Upload an FNOL or insurance PDF. The AI extracts structured fields,
+          detects missing data, and routes the claim — in seconds.
         </p>
       </div>
 
-      {/* ── Two-column layout on large screens ────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[400px_1fr] gap-6">
+      {/* ── Two-column layout ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6 items-start">
 
-        {/* ── Left: upload panel ──────────────────────────────────────── */}
+        {/* ── LEFT PANEL: upload + controls ──────────────────────────────── */}
         <div className="space-y-4">
+
+          {/* Upload card */}
           <div className="glass-card p-6 space-y-5">
             <p className="section-title">Upload Document</p>
 
             <DropZone
-              onFileSelect={setFile}
-              selectedFile={file}
-              onClear={reset}
-              disabled={loading}
+              onFileSelect={handleFileSelect}
+              disabled={isLoading}
             />
 
-            {/* Actions */}
-            <div className="flex flex-col gap-2.5">
-              <button
-                id="btn-process"
-                onClick={() => run('process')}
-                disabled={!file || loading}
-                className="btn-primary justify-center w-full"
-              >
-                <UploadCloud size={17} />
-                {loading && file ? 'Processing…' : 'Process PDF'}
-              </button>
-
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-white/5" />
-                <span className="text-xs text-slate-600 font-medium">or</span>
-                <div className="flex-1 h-px bg-white/5" />
+            {/* ── Action buttons / loading state ─────────────────────────── */}
+            {isLoading ? (
+              /* Full-width loading pill while API in flight */
+              <div className="flex items-center justify-center gap-3 py-3
+                              rounded-xl bg-white/5 border border-white/10">
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="rgba(59,130,246,0.2)" strokeWidth="3" />
+                  <path d="M12 2 A10 10 0 0 1 22 12"
+                        stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                <span className="text-sm font-medium text-slate-400">
+                  Processing with LLaMA 3.3-70b…
+                </span>
               </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {/* Process PDF button */}
+                <button
+                  id="btn-process-pdf"
+                  onClick={() => submit('process')}
+                  disabled={!file || isLoading}
+                  className="btn-primary justify-center w-full"
+                >
+                  <UploadCloud size={17} />
+                  Process PDF
+                </button>
 
-              <button
-                id="btn-test"
-                onClick={() => run('test')}
-                disabled={loading}
-                className="btn-secondary justify-center w-full"
-              >
-                <FlaskConical size={16} />
-                {loading && !file ? 'Running…' : 'Run Test Sample'}
-              </button>
-            </div>
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-white/5" />
+                  <span className="text-xs text-slate-600 font-medium">or</span>
+                  <div className="flex-1 h-px bg-white/5" />
+                </div>
+
+                {/* Test sample button — always enabled */}
+                <button
+                  id="btn-test-claim"
+                  onClick={() => submit('test')}
+                  disabled={isLoading}
+                  className="btn-secondary justify-center w-full"
+                >
+                  <FlaskConical size={16} />
+                  Run Test Claim
+                </button>
+              </div>
+            )}
           </div>
 
           {/* How it works card */}
@@ -115,61 +154,119 @@ export default function ClaimsProcessor() {
             <p className="section-title">How It Works</p>
             {[
               ['1', 'PDF text extracted via pdfplumber'],
-              ['2', 'Groq LLaMA 3.3-70b extracts structured fields'],
-              ['3', 'Mandatory fields validated for completeness'],
-              ['4', 'Deterministic rules assign a claim route'],
+              ['2', 'Groq LLaMA 3.3-70b extracts 12 structured fields'],
+              ['3', 'Mandatory fields checked for completeness'],
+              ['4', 'Deterministic rules assign a routing decision'],
+              ['5', 'Result persisted to SQLite claims history'],
             ].map(([n, text]) => (
               <div key={n} className="flex items-start gap-3">
-                <span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                <span className="w-5 h-5 rounded-full bg-accent/15 text-accent
+                                 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
                   {n}
                 </span>
                 <p className="text-xs text-slate-400 leading-relaxed">{text}</p>
               </div>
             ))}
           </div>
+
+          {/* Routing rules quick reference */}
+          <div className="glass-card p-5 space-y-3">
+            <p className="section-title">Routing Rules</p>
+            {[
+              ['🔴', 'Investigation Flag', 'Fraud keyword in description'],
+              ['🟡', 'Manual Review',      'Any mandatory field missing'],
+              ['🔵', 'Specialist Queue',   'Claim type = injury'],
+              ['🟢', 'Fast-track',         'Damage < $25,000'],
+              ['⚪', 'Standard Review',    'All other claims'],
+            ].map(([emoji, route, rule]) => (
+              <div key={route} className="flex items-start gap-2.5">
+                <span className="text-sm shrink-0 mt-0.5">{emoji}</span>
+                <div>
+                  <span className="text-xs font-semibold text-slate-300">{route}</span>
+                  <span className="text-xs text-slate-600 ml-1.5">— {rule}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* ── Right: results ──────────────────────────────────────────── */}
-        <div>
-          {loading && (
-            <div className="glass-card p-8">
-              <LoadingSpinner label="Extracting fields with LLaMA 3.3-70b…" size={48} />
-            </div>
-          )}
+        {/* ── RIGHT PANEL: loading / error / results ──────────────────────── */}
+        <div className="min-h-[400px]">
 
-          {error && !loading && (
-            <div className="glass-card p-6 border-red-500/25 bg-red-900/10">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-red-900/40 flex items-center justify-center shrink-0">
-                  <span className="text-red-400 text-base">✕</span>
+          {/* Loading spinner — full panel */}
+          {isLoading && <LoadingSpinner />}
+
+          {/* Error card */}
+          {!isLoading && error && (
+            <div className="glass-card p-6 border-red-500/20 bg-red-950/20
+                            animate-fade-in">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-red-900/50 border border-red-500/30
+                                flex items-center justify-center shrink-0">
+                  <AlertCircle size={20} className="text-red-400" />
                 </div>
-                <div>
-                  <p className="font-semibold text-red-300 text-sm mb-1">Processing Failed</p>
-                  <p className="text-xs text-red-400/80 leading-relaxed">{error}</p>
-                  <button
-                    onClick={reset}
-                    className="mt-3 flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
-                  >
-                    <RotateCcw size={13} /> Try again
-                  </button>
+                <div className="flex-1">
+                  <p className="font-semibold text-red-300 mb-1">Processing Failed</p>
+                  <p className="text-sm text-red-400/80 leading-relaxed">{error}</p>
+                  <div className="flex items-center gap-3 mt-4">
+                    <button
+                      onClick={reset}
+                      className="flex items-center gap-1.5 text-xs text-slate-400
+                                 hover:text-white transition-colors"
+                    >
+                      <RotateCcw size={13} />
+                      Try again
+                    </button>
+                    <span className="text-slate-700">·</span>
+                    <button
+                      onClick={() => submit('test')}
+                      className="flex items-center gap-1.5 text-xs text-slate-400
+                                 hover:text-white transition-colors"
+                    >
+                      <FlaskConical size={13} />
+                      Run test sample instead
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {result && !loading && (
-            <ResultsPanel result={result} />
+          {/* Results panel */}
+          {!isLoading && results && (
+            <div>
+              {/* "Process Another" bar */}
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-semibold text-slate-300">
+                  Claim processed successfully
+                </p>
+                <button
+                  onClick={reset}
+                  className="btn-secondary text-xs py-1.5 px-3"
+                >
+                  <RotateCcw size={13} />
+                  Process Another
+                </button>
+              </div>
+              <ResultsPanel results={results} />
+            </div>
           )}
 
-          {!result && !loading && !error && (
-            <div className="glass-card p-10 flex flex-col items-center justify-center text-center gap-4 min-h-[320px]">
-              <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
-                <UploadCloud size={26} className="text-slate-600" />
+          {/* Empty state — no results, no error, not loading */}
+          {!isLoading && !results && !error && (
+            <div className="glass-card p-10 flex flex-col items-center justify-center
+                            text-center gap-5 min-h-[400px]">
+              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
+                <UploadCloud size={28} className="text-slate-700" />
               </div>
               <div>
-                <p className="font-semibold text-slate-400">No claim processed yet</p>
-                <p className="text-xs text-slate-600 mt-1">
-                  Upload a PDF or click "Run Test Sample" to begin.
+                <p className="font-semibold text-slate-500 text-base">
+                  Awaiting a claim document
+                </p>
+                <p className="text-sm text-slate-700 mt-1.5 max-w-xs">
+                  Drop a PDF on the left, or click{' '}
+                  <span className="text-accent-light font-medium">Run Test Claim</span>
+                  {' '}to see a live demo.
                 </p>
               </div>
             </div>

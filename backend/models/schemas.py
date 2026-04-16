@@ -40,43 +40,34 @@ class HealthResponse(BaseModel):
 
 class ClaimResponse(BaseModel):
     """
-    Top-level response returned by POST /api/claims/process.
-
-    Attributes
-    ----------
-    extractedFields:
-        Dictionary of all fields extracted from the PDF by the LLM.
-        Keys are field names (e.g. ``"claim_number"``, ``"estimated_damage"``);
-        values are the extracted values or ``None`` when not found.
-    missingFields:
-        List of mandatory field names that were either absent from the document
-        or could not be extracted with sufficient confidence.
-    recommendedRoute:
-        One of: ``"Fast-track"``, ``"Manual Review"``,
-        ``"Investigation Flag"``, ``"Specialist Queue"``,
-        ``"Standard Review"``.
-    reasoning:
-        Human-readable explanation of why a particular route was chosen,
-        including which rules fired and which fields influenced the decision.
+    Top-level response returned by POST /api/claims/process and /api/claims/test.
     """
+
+    documentType: str = Field(
+        ...,
+        description="The identified type of document.",
+        examples=["insurance_claim", "medical_claim", "police_report", "unknown"]
+    )
+    
+    confidence: str = Field(
+        ...,
+        description="Confidence level of the LLM extraction.",
+        examples=["high", "medium", "low"]
+    )
+
+    completenessScore: int = Field(
+        ...,
+        description="Score between 0 and 100 representing how many mandatory fields were found.",
+        examples=[100, 85, 0]
+    )
 
     extractedFields: dict[str, Any] = Field(
         ...,
-        description="All fields extracted from the PDF by the LLM.",
+        description="Dictionary of all fields extracted from the PDF by the LLM.",
         examples=[
             {
                 "claim_number": "CLM-2024-00123",
-                "claimant_name": "Jane Doe",
-                "policy_number": "POL-987654",
-                "incident_date": "2024-03-15",
-                "incident_description": "Vehicle collision at highway junction.",
-                "claim_type": "vehicle",
                 "estimated_damage": 18000.0,
-                "contact_phone": "+1-555-0100",
-                "contact_email": "jane.doe@example.com",
-                "witness_info": None,
-                "police_report_number": "PR-20240315-042",
-                "supporting_docs": ["photos.zip"],
             }
         ],
     )
@@ -89,21 +80,14 @@ class ClaimResponse(BaseModel):
 
     recommendedRoute: str = Field(
         ...,
-        description=(
-            "Routing decision. One of: Fast-track | Manual Review | "
-            "Investigation Flag | Specialist Queue | Standard Review."
-        ),
+        description="Routing decision based on rules.",
         examples=["Fast-track"],
     )
 
     reasoning: str = Field(
         ...,
         description="Plain-text explanation of the routing decision.",
-        examples=[
-            "All mandatory fields are present. Estimated damage (18,000) is "
-            "below the 25,000 threshold and claim type is not injury. "
-            "No fraud indicators detected — routed to Fast-track."
-        ],
+        examples=["All mandatory fields are present. Route to Fast-track."],
     )
 
 

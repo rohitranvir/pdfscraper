@@ -38,11 +38,12 @@ export async function processClaim(formData) {
 
 /**
  * POST /api/claims/test
- * Run the full pipeline on the hardcoded FNOL sample (no file needed).
+ * Run the full pipeline using a built-in sample FNOL document.
+ * @param {string} scenario - The scenario id (fast_track, specialist, investigation, manual_review)
  * @returns {Promise<ClaimResponse>}
  */
-export async function testClaim() {
-  const { data } = await api.post('/api/claims/test')
+export async function testClaim(scenario = 'fast_track') {
+  const { data } = await api.post(`/api/claims/test?scenario=${scenario}`)
   return data
 }
 

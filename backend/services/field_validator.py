@@ -1,152 +1,95 @@
 """
 services/field_validator.py
 ----------------------------
-Deterministic, zero-LLM validation of extracted claim fields.
-
-Checks every mandatory field for absence, emptiness, or placeholder sentinel
-values (``None``, ``""``, ``"UNKNOWN"``).  Also verifies that
-``estimated_damage``, when present, is a real numeric value.
-
-No external dependencies beyond the Python standard library.
+Document-type aware validation of extracted fields.
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Field definitions
-# ---------------------------------------------------------------------------
-
-MANDATORY_FIELDS: list[str] = [
-    "claim_number",
-    "claimant_name",
-    "policy_number",
-    "incident_date",
-    "incident_description",
-    "claim_type",
-    "estimated_damage",
-]
+# Define mandatory fields per document type
+MANDATORY_FIELDS = {
+    "insurance_claim": [
+        "claimant_name", "policy_number", "incident_date",
+        "incident_description", "claim_type", "estimated_damage"
+    ],
+    "medical_claim": [
+        "patient_name", "treatment_date", "hospital_name",
+        "diagnosis", "estimated_cost"
+    ],
+    "police_report": [
+        "report_number", "incident_date", "location",
+        "incident_description", "involved_parties"
+    ],
+    "legal_complaint": [
+        "plaintiff", "defendant", "filing_date",
+        "complaint_description", "claimed_damages"
+    ],
+    "property_damage": [
+        "property_address", "owner_name", "damage_type",
+        "incident_date", "estimated_repair_cost"
+    ],
+    "unknown": []
+}
 
 # String values that count as "not provided" even when the key exists.
-# Checked case-insensitively so "unknown", "Unknown", "UNKNOWN" all match.
 _EMPTY_SENTINELS: frozenset[str] = frozenset({"unknown", "", "null", "none", "n/a", "na", "not provided"})
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
-def validate_fields(fields: dict) -> list[str]:
+def validate_fields(fields: dict, doc_type: str) -> tuple[list[str], float]:
     """
-    Return the names of mandatory fields that are absent, empty, or invalid.
-
-    A mandatory field is considered missing when its value is:
-    - ``None``
-    - An empty string ``""``
-    - A sentinel string such as ``"UNKNOWN"``, ``"null"``, ``"N/A"`` etc.
-      (compared case-insensitively).
-
-    Additionally, ``estimated_damage`` is validated to be numeric (``int`` or
-    ``float``).  If the value is a non-numeric string (e.g. ``"TBD"``) it is
-    also added to the missing list.
-
-    Parameters
-    ----------
-    fields:
-        Normalised extraction dict returned by ``llm_extractor.extract_fields``.
-
-    Returns
-    -------
-    list[str]
-        Ordered list of missing mandatory field names.  An empty list means
-        all mandatory fields are present and valid.
-
-    Examples
-    --------
-    >>> validate_fields({"claim_number": "CLM-001", "claimant_name": None, ...})
-    ['claimant_name', ...]
-
-    >>> validate_fields({"estimated_damage": "not sure", ...})
-    [..., 'estimated_damage']
+    Return missing mandatory fields and a completeness score (0-100) based on doc_type.
     """
+    mandatory = MANDATORY_FIELDS.get(doc_type, [])
+    
+    if not mandatory:
+        # If no mandatory fields apply, it's 100% complete and nothing is missing
+        return [], 100.0
+
     missing: list[str] = []
 
-    for field in MANDATORY_FIELDS:
+    for field in mandatory:
         value = fields.get(field)
-
-        if field == "estimated_damage":
-            # Special numeric validation — runs even when value is not None
-            if _is_missing(value):
-                logger.debug("Mandatory field '%s' is absent/empty.", field)
-                missing.append(field)
-            elif not _is_numeric(value):
-                logger.warning(
-                    "Field 'estimated_damage' has non-numeric value %r — treating as missing.",
-                    value,
-                )
-                missing.append(field)
-        else:
-            if _is_missing(value):
-                logger.debug("Mandatory field '%s' is absent/empty.", field)
+        
+        # Check standard absence/emptiness
+        if _is_missing(value):
+            missing.append(field)
+        
+        # Additional numeric bounds checking for cost/damage fields
+        elif field in ["estimated_damage", "estimated_cost", "estimated_repair_cost", "claimed_damages"]:
+            if not _is_numeric(value):
+                logger.warning("Field '%s' has non-numeric value %r — treating as missing.", field, value)
                 missing.append(field)
 
-    if missing:
-        logger.info("Missing / invalid mandatory fields (%d): %s", len(missing), missing)
-    else:
-        logger.info("All %d mandatory fields passed validation.", len(MANDATORY_FIELDS))
+    found_count = len(mandatory) - len(missing)
+    completeness_score = (found_count / len(mandatory)) * 100.0
 
-    return missing
+    logger.info("Validation for %s: %d missing fields. Score: %.1f%%", 
+                doc_type, len(missing), completeness_score)
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+    return missing, completeness_score
 
 
 def _is_missing(value: object) -> bool:
-    """
-    Return ``True`` when *value* should be treated as not provided.
-
-    Parameters
-    ----------
-    value:
-        Raw value from the extraction dict (any type).
-
-    Returns
-    -------
-    bool
-    """
+    """Return True if value represents absence."""
     if value is None:
         return True
     if isinstance(value, str):
         return value.strip().lower() in _EMPTY_SENTINELS
+    if isinstance(value, list) and len(value) == 0:
+        return True
     return False
 
 
 def _is_numeric(value: object) -> bool:
-    """
-    Return ``True`` when *value* can be interpreted as a valid number.
-
-    Accepts ``int``, ``float``, and numeric strings (with optional leading
-    currency symbols or comma separators that the LLM sometimes includes).
-
-    Parameters
-    ----------
-    value:
-        Raw value from the extraction dict.
-
-    Returns
-    -------
-    bool
-    """
+    """Return True if value can be parsed as a number."""
     if isinstance(value, (int, float)):
         return True
     if isinstance(value, str):
-        # Strip common currency / formatting characters then attempt parse
         cleaned = value.strip().lstrip("$€£¥").replace(",", "")
         try:
             float(cleaned)

@@ -1,7 +1,7 @@
 /**
  * ExtractedFieldsTable.jsx
  * -------------------------
- * Two-column responsive grid of extracted insurance claim fields.
+ * Two-column responsive grid of dynamically extracted fields.
  *
  * Props
  * -----
@@ -10,31 +10,6 @@
  */
 
 import { XCircle, CheckCircle2, MinusCircle } from 'lucide-react'
-
-const MANDATORY = new Set([
-  'claim_number',
-  'claimant_name',
-  'policy_number',
-  'incident_date',
-  'incident_description',
-  'claim_type',
-  'estimated_damage',
-])
-
-const FIELD_META = [
-  { key: 'claim_number',         label: 'Claim Number' },
-  { key: 'claimant_name',        label: 'Claimant Name' },
-  { key: 'policy_number',        label: 'Policy Number' },
-  { key: 'incident_date',        label: 'Incident Date' },
-  { key: 'claim_type',           label: 'Claim Type' },
-  { key: 'estimated_damage',     label: 'Estimated Damage' },
-  { key: 'incident_description', label: 'Description' },
-  { key: 'contact_phone',        label: 'Phone' },
-  { key: 'contact_email',        label: 'Email' },
-  { key: 'police_report_number', label: 'Police Report #' },
-  { key: 'witness_info',         label: 'Witness Info' },
-  { key: 'supporting_docs',      label: 'Supporting Docs' },
-]
 
 /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -48,11 +23,18 @@ function isEmpty(value) {
   return false
 }
 
+function formatLabel(key) {
+  return key
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 function formatValue(key, value) {
   if (isEmpty(value)) return null
 
-  // Currency for damage
-  if (key === 'estimated_damage') {
+  // Currency for damage/cost fields
+  if (key.includes('damage') || key.includes('cost') || key.includes('damages')) {
     const n = parseFloat(String(value).replace(/[,$€£¥]/g, ''))
     if (!isNaN(n)) {
       return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
@@ -62,17 +44,12 @@ function formatValue(key, value) {
   // Array → comma list
   if (Array.isArray(value)) return value.join(', ')
 
-  // Capitalize claim type
-  if (key === 'claim_type') {
-    return String(value).charAt(0).toUpperCase() + String(value).slice(1)
-  }
-
   return String(value)
 }
 
 /* ─── Single field card ────────────────────────────────────────────────── */
 
-function FieldCard({ label, fieldKey, value, isMissing, isMandatory }) {
+function FieldCard({ label, fieldKey, value, isMissing }) {
   const formatted = formatValue(fieldKey, value)
   const empty     = formatted === null
 
@@ -80,24 +57,22 @@ function FieldCard({ label, fieldKey, value, isMissing, isMandatory }) {
     ? 'bg-red-950/30 border-red-500/25 ring-1 ring-red-500/10'
     : 'bg-white/[0.025] border-white/[0.06]'
 
+  const isFullWidth = fieldKey.includes('description') || fieldKey.includes('info')
+
   return (
-    <div className={`rounded-xl border px-4 py-3.5 flex flex-col gap-1 transition-colors ${containerClass}`}>
+    <div className={`rounded-xl border px-4 py-3.5 flex flex-col gap-1 transition-colors ${containerClass} ${isFullWidth ? 'col-span-full' : ''}`}>
       {/* Label row */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
           {label}
-          {isMandatory && (
-            <span className={`ml-1.5 ${isMissing ? 'text-red-600' : 'text-slate-700'}`}>*</span>
-          )}
         </span>
 
-        {/* Status icon — only for mandatory fields */}
-        {isMandatory && (
-          isMissing
-            ? <XCircle size={14} className="text-red-500 shrink-0" />
-            : <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-        )}
-        {!isMandatory && empty && (
+        {/* Status icon */}
+        {isMissing ? (
+          <XCircle size={14} className="text-red-500 shrink-0" />
+        ) : !empty ? (
+          <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+        ) : (
           <MinusCircle size={13} className="text-slate-700 shrink-0" />
         )}
       </div>
@@ -110,8 +85,8 @@ function FieldCard({ label, fieldKey, value, isMissing, isMandatory }) {
           className={`
             text-sm font-medium leading-snug break-words
             ${isMissing ? 'text-red-300' : 'text-white'}
-            ${fieldKey === 'incident_description' ? 'text-xs leading-relaxed font-normal text-slate-300' : ''}
-            ${fieldKey === 'estimated_damage' && !isMissing ? 'text-emerald-300 font-bold text-base' : ''}
+            ${isFullWidth ? 'text-xs leading-relaxed font-normal text-slate-300' : ''}
+            {(fieldKey.includes('damage') || fieldKey.includes('cost')) && !isMissing ? 'text-emerald-300 font-bold text-base' : ''}
           `}
         >
           {formatted}
@@ -125,59 +100,49 @@ function FieldCard({ label, fieldKey, value, isMissing, isMandatory }) {
 
 export default function ExtractedFieldsTable({ fields = {}, missingFields = [] }) {
   const missingSet = new Set(missingFields)
+  
+  // Combine keys from both extracted fields and missing fields
+  const allKeys = Array.from(new Set([...Object.keys(fields), ...missingFields]))
 
-  // Put missing fields first, then mandatory, then optional
-  const sorted = [...FIELD_META].sort((a, b) => {
-    const aMissing = missingSet.has(a.key) ? 0 : 1
-    const bMissing = missingSet.has(b.key) ? 0 : 1
+  // Sort: missing first, then alphabetical (ignoring 'description' which we handle in CSS full-width)
+  const sortedKeys = allKeys.sort((a, b) => {
+    const aMissing = missingSet.has(a) ? 0 : 1
+    const bMissing = missingSet.has(b) ? 0 : 1
     if (aMissing !== bMissing) return aMissing - bMissing
-    const aMand = MANDATORY.has(a.key) ? 0 : 1
-    const bMand = MANDATORY.has(b.key) ? 0 : 1
-    return aMand - bMand
-  })
+    
+    // Push descriptions to the bottom
+    const aDesc = a.includes('description') ? 1 : 0
+    const bDesc = b.includes('description') ? 1 : 0
+    if (aDesc !== bDesc) return aDesc - bDesc
 
-  // Description spans full width — pull it out
-  const descIndex  = sorted.findIndex(f => f.key === 'incident_description')
-  const descItem   = descIndex > -1 ? sorted.splice(descIndex, 1)[0] : null
+    return a.localeCompare(b)
+  })
 
   return (
     <div className="space-y-3">
       {/* Grid fields */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {sorted.map(({ key, label }) => (
+        {sortedKeys.map((key) => (
           <FieldCard
             key={key}
             fieldKey={key}
-            label={label}
+            label={formatLabel(key)}
             value={fields[key]}
             isMissing={missingSet.has(key)}
-            isMandatory={MANDATORY.has(key)}
           />
         ))}
       </div>
 
-      {/* Description — full width */}
-      {descItem && (
-        <FieldCard
-          key="incident_description"
-          fieldKey="incident_description"
-          label={descItem.label}
-          value={fields['incident_description']}
-          isMissing={missingSet.has('incident_description')}
-          isMandatory={true}
-        />
-      )}
-
       {/* Legend */}
       <div className="flex items-center gap-4 pt-1">
         <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
-          <CheckCircle2 size={11} className="text-emerald-600" /> Mandatory extracted
+          <CheckCircle2 size={11} className="text-emerald-600" /> Extracted
         </span>
         <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
-          <XCircle size={11} className="text-red-600" /> Mandatory missing
+          <XCircle size={11} className="text-red-600" /> Missing (Mandatory)
         </span>
         <span className="flex items-center gap-1.5 text-[11px] text-slate-600">
-          <MinusCircle size={11} className="text-slate-700" /> Optional absent
+          <MinusCircle size={11} className="text-slate-700" /> Empty
         </span>
       </div>
     </div>

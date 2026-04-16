@@ -61,13 +61,52 @@ function Section({ icon: Icon, title, badge, children, defaultOpen = true }) {
 
 /* ── Main component ───────────────────────────────────────────────────── */
 export default function ResultsPanel({ results }) {
-  const { extractedFields, missingFields, recommendedRoute, reasoning } = results
+  const { extractedFields, missingFields, recommendedRoute, reasoning, documentType, confidence, completenessScore } = results
+
+  const confidenceColor = {
+    high: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]',
+    medium: 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]',
+    low: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]',
+  }[confidence?.toLowerCase() || 'low'] || 'bg-slate-500'
+
+  const docTypeLabel = (documentType || 'unknown')
+    .split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
   return (
     <div
       className="space-y-4"
       style={{ animation: 'slideUp 0.45s ease-out forwards' }}
     >
+
+      {/* ── 0. Meta data row (Document type, Confidence, Completeness) ──── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
+        
+        <div className="flex items-center gap-3">
+          {/* Doc type pill */}
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-full">
+            {docTypeLabel}
+          </span>
+          {/* Confidence */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
+            <span className={`w-2 h-2 rounded-full ${confidenceColor}`}></span>
+            <span className="text-xs font-medium text-slate-300 capitalize">{confidence} Confidence</span>
+          </div>
+        </div>
+
+        {/* Completeness */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-slate-400">Completeness</span>
+          <div className="flex items-center gap-2">
+            <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div 
+                 className={`h-full rounded-full transition-all duration-1000 ${completenessScore === 100 ? 'bg-emerald-500' : completenessScore > 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                 style={{ width: `${completenessScore || 0}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold text-white w-8 text-right">{completenessScore || 0}%</span>
+          </div>
+        </div>
+      </div>
 
       {/* ── 1. Status badge — large, centered ─────────────────────────── */}
       <StatusBadge route={recommendedRoute} large />

@@ -1,47 +1,43 @@
 # Autonomous Insurance Claims Processing Agent
 
-> Upload an FNOL or insurance PDF → AI extracts 12 structured fields → missing fields detected → deterministic routing decision returned in seconds.
-> Built with FastAPI + Groq LLaMA 3.3-70b for extraction and React + Vite + Tailwind CSS for the frontend.
-> Processes claims end-to-end: PDF parsing → LLM extraction → field validation → routing → SQLite persistence.
+> An intelligent, tireless digital mailroom that instantly extracts, organizes, and routes incoming insurance claims using AI.
 
----
+## The Problem
+Insurance companies are constantly drowning in messy paperwork and unorganized emails. Human workers currently waste countless hours just reading incoming documents, copying that data into other software, and guessing which department should handle it next. 
 
-## Architecture
+This program solves that bottleneck by doing the reading, organizing, and sorting in a matter of seconds, meaning customers get their money faster while human agents can focus on complex investigations instead of basic data entry.
 
-```
-┌─────────────────────────────────────────────────────┐
-│                React + Vite Frontend                │
-│  DropZone → Process / Test → ResultsPanel           │
-│  ClaimsHistory table (last 20 claims)               │
-└──────────────────────┬──────────────────────────────┘
-                       │  HTTP (axios)
-                       ▼
-┌─────────────────────────────────────────────────────┐
-│               FastAPI Backend (:8000)               │
-│                                                     │
-│  POST /api/claims/process  (PDF upload)             │
-│  POST /api/claims/test     (hardcoded sample)       │
-│  GET  /api/claims/history  (last 20 records)        │
-│  GET  /health                                       │
-│                                                     │
-│  ┌───────────┐   ┌──────────────┐   ┌───────────┐  │
-│  │pdf_parser │ → │llm_extractor │ → │ validator │  │
-│  │pdfplumber │   │Groq LLaMA    │   │ (pure py) │  │
-│  └───────────┘   │3.3-70b       │   └─────┬─────┘  │
-│                  └──────────────┘         │         │
-│                                     ┌────▼──────┐  │
-│                                     │claim_router│  │
-│                                     │(pure py)  │  │
-│                                     └─────┬─────┘  │
-│                                           │         │
-│                                    ┌──────▼──────┐  │
-│                                    │  SQLite DB  │  │
-│                                    │(aiosqlite)  │  │
-│                                    └─────────────┘  │
-└─────────────────────────────────────────────────────┘
-```
+## Features
 
----
+* **Document Upload:** Users can quickly drag and drop incoming insurance claim files directly into the web interface.
+* **Smart Text Reading:** The system instantly looks inside digital documents to grab the raw text without any human typing.
+* **AI-Powered Understanding:** An artificial intelligence acts like a human reader to pluck out crucial details like the claimant's name, phone number, and estimated damage.
+* **Missing Information Check:** It automatically scans the captured data to see if any mandatory details were forgotten by the customer.
+* **Automated Claim Sorting:** The system uses a strict set of rules to instantly categorize the severity of the claim and decide where it should go next.
+* **Quick Test Scenarios:** Users can click a button to test out four different fake claims immediately, without needing to upload real files.
+* **Digital Record Keeping:** Every processed claim is automatically saved into a secure log so managers can see past activity.
+
+## How It Works Step-by-Step
+
+1. **Upload:** A worker drops an insurance claim document onto the web page.
+2. **Read:** The software peels open the document and extracts all the messy, unorganized text hidden inside.
+3. **Understand:** The artificial intelligence reads the story and neatly organizes the details (like dates, names, and money) into a clean digital form.
+4. **Double-Check:** The core rules check the organized data to see if anything is missing or if the description contains suspicious words.
+5. **Decide:** The system immediately displays an action plan for the claim alongside all the freshly organized customer details.
+
+## Why Each Feature Matters in the Real World
+
+* **Document Upload** makes it incredibly simple for employees to start working using the typical files they already receive.
+* **Smart Text Reading** eliminates the daily drudgery of employees manually retyping long incident reports.
+* **AI-Powered Understanding** allows customers to explain their accident naturally in an email or letter, rather than forcing them to fill out confusing web forms.
+* **Missing Information Check** stops incomplete claims in their tracks immediately, preventing weeks of frustrating back-and-forth emails.
+* **Automated Claim Sorting** ensures minor bumper scratches are approved fast, while suspicious or high-dollar claims go straight to veteran investigators.
+* **Quick Test Scenarios** allow managers to safely train new agents on the software without accidentally processing live data.
+* **Digital Record Keeping** provides an unquestionable audit trail, proving exactly why the company made its initial routing decision.
+
+## Screenshots
+
+*(Insert screenshots of the UI, DropZone, and Results Table here)*
 
 ## Tech Stack
 
@@ -52,177 +48,12 @@
 | HTTP Client  | Axios                               | latest   |
 | Icons        | Lucide React                        | latest   |
 | Routing (FE) | React Router DOM                    | 6        |
-| Backend      | FastAPI + Uvicorn                   | 0.136 /  0.44 |
+| Backend      | FastAPI + Uvicorn                   | 0.136 / 0.44 |
 | LLM          | Groq API — llama-3.3-70b-versatile  | —        |
 | PDF Parsing  | pdfplumber                          | 0.11     |
 | Database     | SQLite via SQLAlchemy + aiosqlite   | 2.0 / 0.22 |
 | Validation   | Pydantic v2                         | 2.x      |
 | Language     | Python 3.10+, Node 18+              | —        |
-
----
-
-## Prerequisites
-
-- **Python** 3.10 or higher
-- **Node.js** 18 or higher + npm
-- **Groq API key** — obtain free at [console.groq.com/keys](https://console.groq.com/keys)
-- Git (to clone the repo)
-
----
-
-## Backend Setup
-
-```bash
-# 1. Navigate to the backend folder
-cd backend
-
-# 2. Create and activate a virtual environment (recommended)
-python -m venv .venv
-
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-
-# macOS / Linux
-source .venv/bin/activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Configure environment variables
-copy .env.example .env        # Windows
-# cp .env.example .env        # macOS / Linux
-
-# 5. Edit .env and paste your Groq API key
-#    GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
-#    GROQ_MODEL=llama-3.3-70b-versatile
-#    DATABASE_URL=sqlite+aiosqlite:///./claims.db
-
-# 6. Start the server
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-The API will be available at:
-- Swagger UI → http://localhost:8000/docs
-- ReDoc → http://localhost:8000/redoc
-- Health → http://localhost:8000/health
-
----
-
-## Frontend Setup
-
-```bash
-# 1. Navigate to the frontend folder
-cd frontend
-
-# 2. Install npm dependencies
-npm install
-
-# 3. Configure environment
-copy .env.example .env        # Windows
-# cp .env.example .env        # macOS / Linux
-# VITE_API_URL=http://localhost:8000
-
-# 4. Start the dev server
-npm run dev
-```
-
-App will open at **http://localhost:5173**
-
----
-
-## Running the Smoke Tests
-
-```bash
-cd backend
-pip install httpx        # if not already installed
-python test_api.py
-```
-
-> The backend must be running on port 8000 before executing tests.
-
----
-
-## Sample cURL Commands
-
-### 1. Health check
-```bash
-curl http://localhost:8000/health
-```
-```json
-{ "status": "ok", "model": "llama-3.3-70b-versatile" }
-```
-
-### 2. Run test claim (no file needed)
-```bash
-curl -X POST http://localhost:8000/api/claims/test
-```
-
-### 3. Upload a real PDF
-```bash
-curl -X POST http://localhost:8000/api/claims/process \
-  -F "file=@/path/to/your/claim.pdf"
-```
-
-### 4. Get claims history
-```bash
-curl http://localhost:8000/api/claims/history
-```
-
----
-
-## Sample JSON Outputs
-
-### Fast-track Claim ✅
-All fields present, vehicle claim, damage below $25,000:
-
-```json
-{
-  "extractedFields": {
-    "claim_number":         "CLM-2024-00199",
-    "claimant_name":        "Michael J. Torres",
-    "policy_number":        "POL-AUTO-887766",
-    "incident_date":        "2024-07-22",
-    "incident_description": "Vehicle struck from behind on Interstate 95 at a red light.",
-    "claim_type":           "vehicle",
-    "estimated_damage":     14500,
-    "contact_phone":        "+1-555-347-9021",
-    "contact_email":        "m.torres@email.com",
-    "police_report_number": "PR-20240722-0089",
-    "witness_info":         "Sarah Nguyen — +1-555-887-2211",
-    "supporting_docs":      ["police_report.pdf", "damage_photos.zip", "repair_estimate.pdf"]
-  },
-  "missingFields":    [],
-  "recommendedRoute": "Fast-track",
-  "reasoning": "All mandatory fields are present, no fraud indicators were detected, and the estimated damage (14,500.00) is below the 25,000 threshold, qualifying this claim for fast-track processing."
-}
-```
-
-### Manual Review Claim ⚠️
-Missing `policy_number` and `estimated_damage`:
-
-```json
-{
-  "extractedFields": {
-    "claim_number":         "CLM-2024-00201",
-    "claimant_name":        "Priya Sharma",
-    "policy_number":        null,
-    "incident_date":        "2024-08-10",
-    "incident_description": "Fire damage to kitchen appliances and structural elements.",
-    "claim_type":           "property",
-    "estimated_damage":     null,
-    "contact_phone":        "+1-555-910-0033",
-    "contact_email":        null,
-    "police_report_number": null,
-    "witness_info":         null,
-    "supporting_docs":      []
-  },
-  "missingFields":    ["policy_number", "estimated_damage"],
-  "recommendedRoute": "Manual Review",
-  "reasoning": "The claim is missing mandatory field(s) 'policy_number', 'estimated_damage', so it requires manual review before it can be processed further."
-}
-```
-
----
 
 ## Routing Rules
 
@@ -234,68 +65,64 @@ Missing `policy_number` and `estimated_damage`:
 | 4           | `estimated_damage` < 25,000                        | Fast-track          |
 | 5 (default) | All fields present, damage ≥ 25,000, no injury     | Standard Review     |
 
-**Fraud keywords:** `fraud`, `inconsistent`, `staged`, `fake`, `fabricated`
-
+**Fraud keywords:** `fraud`, `inconsistent`, `staged`, `fake`, `fabricated`  
 **Mandatory fields:** `claim_number`, `claimant_name`, `policy_number`, `incident_date`, `incident_description`, `claim_type`, `estimated_damage`
 
----
+## Prerequisites
 
-## Project Structure
+- **Python** 3.10 or higher
+- **Node.js** 18 or higher + npm
+- **Git**
 
+## How to Get Your Groq API Key
+
+This project relies on Groq's insanely fast LLM inference (using LLaMA 3.3). You will need a free API key to run it:
+1. Go to [console.groq.com/keys](https://console.groq.com/keys).
+2. Sign in or create an account.
+3. Click "Create API Key" and copy the generated key.
+
+## Setup Instructions
+
+### Backend Setup
+
+```bash
+# 1. Navigate to the backend folder
+cd backend
+
+# 2. Create and activate a virtual environment
+python -m venv .venv
+.venv\Scripts\Activate.ps1       # Windows PowerShell
+# source .venv/bin/activate      # macOS / Linux
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment variables
+copy .env.example .env           # Windows
+# cp .env.example .env           # macOS / Linux
+
+# 5. Open .env and paste your Groq API key:
+# GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
+
+# 6. Start the FastAPI server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
-PDFscrapper/
-├── backend/
-│   ├── main.py                  # FastAPI app, CORS, lifespan, /health
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── test_api.py              # Smoke test suite (httpx, no pytest)
-│   ├── routers/
-│   │   └── claims.py            # /process, /test, /history endpoints
-│   ├── services/
-│   │   ├── pdf_parser.py        # pdfplumber → raw text
-│   │   ├── llm_extractor.py     # Groq API → structured JSON
-│   │   ├── field_validator.py   # detect missing mandatory fields
-│   │   └── claim_router.py      # deterministic 5-rule routing engine
-│   └── models/
-│       ├── schemas.py           # Pydantic: ClaimResponse, HealthResponse
-│       └── db.py                # SQLAlchemy async + aiosqlite
-└── frontend/
-    ├── index.html
-    ├── vite.config.js           # dev proxy /api → :8000
-    ├── tailwind.config.js
-    ├── src/
-    │   ├── App.jsx              # React Router, sticky navbar
-    │   ├── api.js               # axios: processClaim, testClaim, getHistory
-    │   ├── index.css            # dark-mode design system (CSS variables)
-    │   ├── pages/
-    │   │   ├── ClaimsProcessor.jsx
-    │   │   └── ClaimsHistory.jsx
-    │   └── components/
-    │       ├── DropZone.jsx
-    │       ├── ResultsPanel.jsx
-    │       ├── StatusBadge.jsx
-    │       ├── ExtractedFieldsTable.jsx
-    │       ├── MissingFieldsList.jsx
-    │       └── LoadingSpinner.jsx
-    └── .env.example
+*API available at http://localhost:8000/docs*
+
+### Frontend Setup
+
+```bash
+# 1. Navigate to the frontend folder
+cd frontend
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure environment variables
+copy .env.example .env           # Windows
+# cp .env.example .env           # macOS / Linux
+
+# 4. Start the frontend dev server
+npm run dev
 ```
-
----
-
-## Known Limitations
-
-| Limitation | Detail |
-|---|---|
-| **Scanned PDFs not supported** | `pdfplumber` extracts selectable text only. Image-based or scanned PDFs return a 422 error: _"PDF appears to be scanned or image-based. OCR not supported in v1."_ |
-| **LLM extraction quality** | Groq LLaMA 3.3-70b may misparse poorly formatted or multi-column PDFs. Always verify extracted fields in the UI. |
-| **Single-user SQLite** | SQLite is sufficient for local/dev use. For production or concurrent users, swap `DATABASE_URL` to PostgreSQL (change `aiosqlite` driver to `asyncpg`). |
-| **No authentication** | The API endpoints are open. For production, add OAuth2/API-key middleware. |
-| **60-second LLM timeout** | Long documents or slow Groq responses may time out. Increase `timeout` in `api.js` and uvicorn's `--timeout-keep-alive` if needed. |
-| **English documents only** | The LLM prompt and field validation are calibrated for English-language insurance documents. |
-| **Test endpoint in production** | `/api/claims/test` should be disabled or protected before deploying publicly. |
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE) for details.
+*App available at http://localhost:5173*

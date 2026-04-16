@@ -21,10 +21,11 @@ import LoadingSpinner from '../components/LoadingSpinner'
 /* ═══════════════════════════════════════════════════════════════════════ */
 
 export default function ClaimsProcessor() {
-  const [file,      setFile]      = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [results,   setResults]   = useState(null)
-  const [error,     setError]     = useState('')
+  const [file,            setFile]            = useState(null)
+  const [isLoading,       setIsLoading]       = useState(false)
+  const [loadingScenario, setLoadingScenario] = useState(null)
+  const [results,         setResults]         = useState(null)
+  const [error,           setError]           = useState('')
 
   /* ── Handlers ────────────────────────────────────────────────────────── */
 
@@ -40,10 +41,12 @@ export default function ClaimsProcessor() {
     setResults(null)
     setError('')
     setIsLoading(false)
+    setLoadingScenario(null)
   }, [])
 
-  const submit = useCallback(async (mode) => {
+  const submit = useCallback(async (mode, scenario = null) => {
     setIsLoading(true)
+    if (mode === 'test') setLoadingScenario(scenario)
     setError('')
     setResults(null)
 
@@ -51,7 +54,7 @@ export default function ClaimsProcessor() {
       let data
 
       if (mode === 'test') {
-        data = await testClaim()
+        data = await testClaim(scenario)
       } else {
         const formData = new FormData()
         formData.append('file', file)
@@ -66,6 +69,7 @@ export default function ClaimsProcessor() {
       )
     } finally {
       setIsLoading(false)
+      setLoadingScenario(null)
     }
   }, [file])
 
@@ -81,8 +85,8 @@ export default function ClaimsProcessor() {
           Claims Processor
         </h1>
         <p className="text-slate-400 mt-1.5 text-sm max-w-xl">
-          Upload an FNOL or insurance PDF. The AI extracts structured fields,
-          detects missing data, and routes the claim — in seconds.
+          Upload any claim document — insurance, medical, legal, police report, or property damage. 
+          The AI extracts structured fields, detects missing data, and routes the claim — in seconds.
         </p>
       </div>
 
@@ -102,7 +106,7 @@ export default function ClaimsProcessor() {
             />
 
             {/* ── Action buttons / loading state ─────────────────────────── */}
-            {isLoading ? (
+            {isLoading && !loadingScenario ? (
               /* Full-width loading pill while API in flight */
               <div className="flex items-center justify-center gap-3 py-3
                               rounded-xl bg-white/5 border border-white/10">
@@ -131,20 +135,49 @@ export default function ClaimsProcessor() {
                 {/* Divider */}
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-white/5" />
-                  <span className="text-xs text-slate-600 font-medium">or</span>
+                  <span className="text-xs text-slate-500 font-semibold px-2">Test Scenarios</span>
                   <div className="flex-1 h-px bg-white/5" />
                 </div>
 
-                {/* Test sample button — always enabled */}
-                <button
-                  id="btn-test-claim"
-                  onClick={() => submit('test')}
-                  disabled={isLoading}
-                  className="btn-secondary justify-center w-full"
-                >
-                  <FlaskConical size={16} />
-                  Run Test Claim
-                </button>
+                {/* Test scenarios grid */}
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <button
+                    onClick={() => submit('test', 'fast_track')}
+                    disabled={isLoading}
+                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-green-500/30"
+                  >
+                    {loadingScenario === 'fast_track' ? (
+                      <svg className="animate-spin w-3.5 h-3.5 text-green-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+                    ) : '🟢 Fast-track Test'}
+                  </button>
+                  <button
+                    onClick={() => submit('test', 'specialist')}
+                    disabled={isLoading}
+                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-blue-500/30"
+                  >
+                    {loadingScenario === 'specialist' ? (
+                      <svg className="animate-spin w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+                    ) : '🔵 Specialist Test'}
+                  </button>
+                  <button
+                    onClick={() => submit('test', 'investigation')}
+                    disabled={isLoading}
+                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-red-500/30"
+                  >
+                    {loadingScenario === 'investigation' ? (
+                      <svg className="animate-spin w-3.5 h-3.5 text-red-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+                    ) : '🔴 Investigation Test'}
+                  </button>
+                  <button
+                    onClick={() => submit('test', 'manual_review')}
+                    disabled={isLoading}
+                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-yellow-500/30"
+                  >
+                    {loadingScenario === 'manual_review' ? (
+                      <svg className="animate-spin w-3.5 h-3.5 text-yellow-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+                    ) : '🟡 Manual Review Test'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -219,12 +252,12 @@ export default function ClaimsProcessor() {
                     </button>
                     <span className="text-slate-700">·</span>
                     <button
-                      onClick={() => submit('test')}
+                      onClick={() => submit('test', 'fast_track')}
                       className="flex items-center gap-1.5 text-xs text-slate-400
                                  hover:text-white transition-colors"
                     >
                       <FlaskConical size={13} />
-                      Run test sample instead
+                      Run fast-track test
                     </button>
                   </div>
                 </div>
@@ -264,8 +297,8 @@ export default function ClaimsProcessor() {
                   Awaiting a claim document
                 </p>
                 <p className="text-sm text-slate-700 mt-1.5 max-w-xs">
-                  Drop a PDF on the left, or click{' '}
-                  <span className="text-accent-light font-medium">Run Test Claim</span>
+                  Drop a PDF on the left, or click a{' '}
+                  <span className="text-accent-light font-medium">Test Scenario</span>
                   {' '}to see a live demo.
                 </p>
               </div>

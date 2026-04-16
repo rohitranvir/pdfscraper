@@ -22,8 +22,14 @@ from models.db import AsyncSessionLocal, claims_history, engine, save_claim
 from models.schemas import ClaimResponse, ErrorResponse
 from services.claim_router import route_claim
 from services.field_validator import validate_fields
-from services.llm_extractor import extract_fields
+from services.llm_extractor import extract_fields, detect_document_type
 from services.pdf_parser import extract_text
+from services.test_fixtures import (
+    FIXTURE_FAST_TRACK,
+    FIXTURE_SPECIALIST_QUEUE,
+    FIXTURE_INVESTIGATION_FLAG,
+    FIXTURE_MANUAL_REVIEW,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,35 +44,6 @@ _ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
 )
 _ALLOWED_EXTENSION: str = ".pdf"
 _HISTORY_LIMIT: int = 20
-
-# ---------------------------------------------------------------------------
-# Hardcoded FNOL sample — used by /test so devs don't need a real PDF
-# ---------------------------------------------------------------------------
-
-_SAMPLE_FNOL_TEXT: str = """
-FIRST NOTICE OF LOSS — VEHICLE CLAIM
-
-Claim Number   : CLM-2024-00199
-Policy Number  : POL-AUTO-887766
-Claimant Name  : Michael J. Torres
-Contact Phone  : +1-555-347-9021
-Contact Email  : m.torres@email.com
-
-Incident Date  : 2024-07-22
-Claim Type     : vehicle
-Estimated Damage: 14500
-
-Incident Description:
-On the morning of 22 July 2024, while travelling southbound on Interstate 95,
-the insured vehicle (2021 Toyota Camry, VIN: 4T1BF1FK5MU123456) was struck from
-behind by a white SUV that failed to brake at a red light. The impact caused
-significant damage to the rear bumper, trunk, and exhaust system. Local police
-attended the scene and a report was filed.
-
-Police Report Number : PR-20240722-0089
-Witness: Sarah Nguyen — +1-555-887-2211
-Supporting Documents : police_report.pdf, damage_photos.zip, repair_estimate.pdf
-""".strip()
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +104,11 @@ async def _run_pipeline(raw_text: str, filename: str | None = None) -> ClaimResp
     """
     # -- Step 1: LLM field extraction ----------------------------------------
     try:
-        extracted: dict[str, Any] = await extract_fields(raw_text)
+        doc_type: str = await detect_document_type(raw_text)
+        extraction_result: dict[str, Any] = await extract_fields(raw_text, doc_type)
+        extracted = extraction_result.get("extractedFields", {})
+        doc_type_final = extraction_result.get("documentType", doc_type)
+        confidence = extraction_result.get("confidence", "low")
     except ValueError as exc:
         logger.error("LLM extraction failed: %s", exc)
         raise HTTPException(
@@ -143,7 +124,7 @@ async def _run_pipeline(raw_text: str, filename: str | None = None) -> ClaimResp
 
     # -- Step 2: Validate / detect missing fields ----------------------------
     try:
-        missing: list[str] = validate_fields(extracted)
+        missing, completeness_score = validate_fields(extracted, doc_type_final)
     except Exception as exc:
         logger.error("Field validation error: %s", exc)
         raise HTTPException(
@@ -153,7 +134,7 @@ async def _run_pipeline(raw_text: str, filename: str | None = None) -> ClaimResp
 
     # -- Step 3: Route claim -------------------------------------------------
     try:
-        routing: dict[str, str] = route_claim(extracted, missing)
+        routing: dict[str, Any] = route_claim(extracted, missing, doc_type_final, completeness_score)
     except Exception as exc:
         logger.error("Routing engine error: %s", exc)
         raise HTTPException(
@@ -170,6 +151,7 @@ async def _run_pipeline(raw_text: str, filename: str | None = None) -> ClaimResp
                 "missing_fields_count": len(missing),
                 "estimated_damage":     extracted.get("estimated_damage"),
                 "claim_type":           extracted.get("claim_type"),
+                "doc_type":             doc_type_final,
             }
         )
     except Exception as exc:
@@ -181,6 +163,9 @@ async def _run_pipeline(raw_text: str, filename: str | None = None) -> ClaimResp
         missingFields=missing,
         recommendedRoute=routing["recommendedRoute"],
         reasoning=routing["reasoning"],
+        documentType=routing["documentType"],
+        completenessScore=routing["completenessScore"],
+        confidence=confidence
     )
 
 
@@ -258,20 +243,30 @@ async def process_claim(
     summary="Test endpoint — no PDF upload required",
     description=(
         "Runs the full extraction → validation → routing pipeline on a "
-        "hardcoded sample FNOL document (vehicle claim, damage \\$14,500).  "
-        "Useful for verifying the backend is wired correctly without needing "
+        "variety of hardcoded sample FNOL documents based on scenarios. "
+        "Useful for verifying the backend routing logic without needing "
         "a real PDF."
     ),
 )
-async def test_claim() -> ClaimResponse:
+async def test_claim(scenario: str = "fast_track") -> ClaimResponse:
     """
-    Dry-run the pipeline using a built-in sample FNOL document.
+    Dry-run the pipeline using built-in sample FNOL document fixtures.
+    """
+    fixtures = {
+        "fast_track": FIXTURE_FAST_TRACK,
+        "specialist": FIXTURE_SPECIALIST_QUEUE,
+        "investigation": FIXTURE_INVESTIGATION_FLAG,
+        "manual_review": FIXTURE_MANUAL_REVIEW
+    }
 
-    Expected route: Fast-track
-    (all fields present, no fraud keywords, damage < 25 000)
-    """
-    logger.info("Test endpoint called — using hardcoded FNOL sample.")
-    return await _run_pipeline(_SAMPLE_FNOL_TEXT, filename="__test_sample__.pdf")
+    if scenario not in fixtures:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid scenario. Supported values: {list(fixtures.keys())}"
+        )
+
+    logger.info("Test endpoint called — using scenario: %s", scenario)
+    return await _run_pipeline(fixtures[scenario], filename=f"__test_sample_{scenario}__.pdf")
 
 
 @router.get(

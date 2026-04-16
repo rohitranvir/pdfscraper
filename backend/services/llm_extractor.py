@@ -1,21 +1,8 @@
 """
 services/llm_extractor.py
---------------------------
-Sends raw PDF text to Groq llama-3.3-70b-versatile and returns a structured
-dictionary of extracted insurance-claim fields.
-
-Design notes
-------------
-* Loads GROQ_API_KEY from the environment via python-dotenv at import time.
-* Uses the official ``groq`` Python SDK (synchronous client wrapped in
-  ``asyncio.to_thread`` so the FastAPI endpoint stays non-blocking).
-* The system prompt instructs the model to emit **only** raw JSON — no
-  markdown fences, no prose — and lists every expected field with its type.
-* JSON parsing is guarded with try/except; on failure the raw response is
-  logged and a descriptive ValueError is raised.
-* All fields missing from the JSON are normalised to ``None`` (or ``[]``
-  for the ``supporting_docs`` array) so downstream validation can work with
-  a consistent shape.
+-------------------------
+LLM abstraction layer using Groq's API for dynamic document type detection
+and structured field extraction.
 """
 
 from __future__ import annotations
@@ -25,253 +12,145 @@ import logging
 import os
 import re
 from typing import Any
+import asyncio
 
 from dotenv import load_dotenv
 from groq import Groq
 
-# Load .env file so GROQ_API_KEY is available even when the process is not
-# started by a shell that has already exported it.
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
 _GROQ_API_KEY: str | None = os.getenv("GROQ_API_KEY")
 _MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# ---------------------------------------------------------------------------
-# Field schema — drives both the system prompt and result normalisation
-# ---------------------------------------------------------------------------
-
-# Each entry:  field_name → (json_type_hint, description_for_prompt)
-_FIELDS: dict[str, tuple[str, str]] = {
-    "claim_number":          ("string",            "unique claim identifier"),
-    "claimant_name":         ("string",            "full name of the person filing the claim"),
-    "policy_number":         ("string",            "insurance policy number"),
-    "incident_date":         ("string (ISO 8601)", "date of the incident, YYYY-MM-DD"),
-    "incident_description":  ("string",            "narrative description of what happened"),
-    "claim_type":            ("string",            "MUST be one of: property | vehicle | injury | liability"),
-    "estimated_damage":      ("number",            "monetary estimate of damages as a plain float, no currency symbol"),
-    "contact_phone":         ("string | null",     "claimant's phone number"),
-    "contact_email":         ("string | null",     "claimant's email address"),
-    "witness_info":          ("string | null",     "witness name(s) and/or contact details"),
-    "police_report_number":  ("string | null",     "police or incident report reference number"),
-    "supporting_docs":       ("array of strings",  "list of attached or mentioned document names; use [] if none"),
-}
-
-# Build the field-list section of the system prompt dynamically so adding a
-# new field only requires touching _FIELDS.
-_FIELD_LINES: str = "\n".join(
-    f'  "{name}": <{type_hint}> — {desc}'
-    for name, (type_hint, desc) in _FIELDS.items()
-)
-
-_SYSTEM_PROMPT: str = f"""
-You are an expert insurance claims analyst.
-Your task is to extract structured information from the raw text of an
-insurance First Notice of Loss (FNOL) or claims document.
-
-OUTPUT RULES — follow these exactly:
-1. Return ONLY a single, valid JSON object.
-2. Do NOT include markdown code fences (``` or ```json).
-3. Do NOT include any explanatory text before or after the JSON.
-4. Every key listed below MUST appear in the JSON.
-5. If a field is not found in the document set its value to null
-   (or [] for array fields).
-
-REQUIRED JSON KEYS AND TYPES:
-{_FIELD_LINES}
-""".strip()
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
-async def extract_fields(raw_text: str) -> dict[str, Any]:
-    """
-    Call the Groq LLM to extract structured claim fields from raw PDF text.
-
-    The function is declared ``async`` so it can be awaited by the FastAPI
-    endpoint; internally it calls the synchronous Groq SDK inside
-    ``asyncio.to_thread`` to avoid blocking the event loop.
-
-    Parameters
-    ----------
-    raw_text:
-        Full plain-text content extracted from the PDF by ``pdf_parser``.
-
-    Returns
-    -------
-    dict[str, Any]
-        A dictionary whose keys match ``_FIELDS``.  Fields that the LLM could
-        not find have a value of ``None`` (or ``[]`` for ``supporting_docs``).
-
-    Raises
-    ------
-    ValueError
-        If the LLM response cannot be parsed as JSON, or if the Groq API call
-        itself fails.
-    """
-    import asyncio  # local import to keep module-level imports clean
-
+def _get_client() -> Groq:
     if not _GROQ_API_KEY:
-        raise ValueError(
-            "GROQ_API_KEY is not set.  "
-            "Copy .env.example → .env and add your key."
-        )
-
-    user_message: str = (
-        "Extract the insurance claim fields from the document text below.\n\n"
-        "--- DOCUMENT START ---\n"
-        f"{raw_text}\n"
-        "--- DOCUMENT END ---"
-    )
-
-    logger.info(
-        "Sending %d chars of PDF text to Groq model '%s'.",
-        len(raw_text), _MODEL,
-    )
-
-    # Run synchronous Groq SDK call in a thread pool so we do not block the
-    # FastAPI event loop.
-    raw_response: str = await asyncio.to_thread(
-        _call_groq, user_message
-    )
-
-    return _parse_response(raw_response)
+        raise ValueError("GROQ_API_KEY environment variable is not set. Check your .env file.")
+    return Groq(api_key=_GROQ_API_KEY)
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _call_groq(user_message: str) -> str:
-    """
-    Perform the synchronous Groq API call and return the raw message content.
-
-    Parameters
-    ----------
-    user_message:
-        The user-role message containing the PDF text.
-
-    Returns
-    -------
-    str
-        Raw string content from the first choice of the completion response.
-
-    Raises
-    ------
-    ValueError
-        Wraps any exception raised by the Groq SDK so callers see a consistent
-        error type.
-    """
+def _call_groq_json(system_prompt: str, user_message: str) -> dict:
+    """Helper to call Groq API and strictly parse JSON output."""
+    client = _get_client()
     try:
-        client = Groq(api_key=_GROQ_API_KEY)
         completion = client.chat.completions.create(
             model=_MODEL,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user",   "content": user_message},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
             ],
-            temperature=0.0,    # fully deterministic extraction
-            max_tokens=1024,
-            # Ask Groq to constrain output to a JSON object when supported
+            temperature=0,  # Deterministic output
+            max_tokens=2048,
             response_format={"type": "json_object"},
         )
-        raw: str = completion.choices[0].message.content or ""
-        logger.debug("Groq raw response (first 500 chars): %s", raw[:500])
-        return raw
-
+        raw = completion.choices[0].message.content or ""
+        cleaned = raw.strip()
+        
+        # Clean up markdown JSON fences if the LLM returned them despite JSON mode
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+            
+        return json.loads(cleaned)
     except Exception as exc:
-        logger.error("Groq API call failed: %s", exc)
-        raise ValueError(f"Groq API error: {exc}") from exc
+        logger.error("Groq JSON API call failed: %s", exc)
+        raise ValueError(f"LLM API failure: {exc}") from exc
 
 
-def _parse_response(raw: str) -> dict[str, Any]:
+async def detect_document_type(raw_text: str) -> str:
     """
-    Parse the LLM string response into a Python dict and normalise it.
-
-    Strips any accidental markdown code fences before attempting JSON
-    parsing.  On failure, logs the full raw response at ERROR level and
-    raises a descriptive ValueError.
-
-    Parameters
-    ----------
-    raw:
-        Raw string returned by the Groq completion.
-
-    Returns
-    -------
-    dict[str, Any]
-        Normalised extraction dict with all schema keys present.
-
-    Raises
-    ------
-    ValueError
-        When the response cannot be parsed as valid JSON.
+    Send raw text to Groq and identify what type of document this is.
+    
+    Returns one of:
+    "insurance_claim", "medical_claim", "police_report", 
+    "legal_complaint", "property_damage", "accident_report", "unknown"
     """
-    # Defensive strip: remove ```json ... ``` or ``` ... ``` wrappers in case
-    # the model ignores the no-fences instruction.
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        # Remove opening fence (with optional language tag) and closing fence
-        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
-        cleaned = re.sub(r"\n?```$", "", cleaned)
-        cleaned = cleaned.strip()
-
+    system_prompt = """
+    You are an expert AI document classifier. Analyze the provided text and classify the document into exactly one of the following types:
+    - insurance_claim (ACORD, FNOL, general insurance forms)
+    - medical_claim (Hospital discharge, treatment bills)
+    - police_report (Official police incident records)
+    - legal_complaint (Lawsuits, plaintiff/defendant filings)
+    - property_damage (Contractor estimates, property inspection reports)
+    - accident_report (General accident description not directly an insurance or police form)
+    - unknown (Any other type of text that doesn't fit the above)
+    
+    Return ONLY a JSON object with a single key 'document_type' containing the exact classification string.
+    """
+    # Just send the first chunk of text to save tokens, usually enough to identify doc type
+    user_message = f"--- DOCUMENT TEXT ---\n{raw_text[:3000]}\n--- END ---"
+    
     try:
-        parsed: dict[str, Any] = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        logger.error(
-            "JSON parse failed.\n"
-            "  Error   : %s\n"
-            "  Raw resp: %s",
-            exc, raw,
-        )
-        raise ValueError(
-            f"LLM returned invalid JSON (offset {exc.pos}): {exc.msg}. "
-            "Raw response has been logged at ERROR level."
-        ) from exc
-
-    return _normalise(parsed)
+        data = await asyncio.to_thread(_call_groq_json, system_prompt, user_message)
+        doc_type = data.get("document_type", "unknown")
+        logger.info("Detected document type: %s", doc_type)
+        return doc_type
+    except Exception as exc:
+        logger.error("Failed to detect document type: %s", exc)
+        return "unknown"
 
 
-def _normalise(raw: dict[str, Any]) -> dict[str, Any]:
+async def extract_fields(raw_text: str, doc_type: str) -> dict[str, Any]:
     """
-    Ensure every schema key is present in the returned dict.
-
-    Missing keys are inserted as ``None``; ``supporting_docs`` defaults to
-    ``[]`` so callers can safely iterate it without a None-check.
-
-    Parameters
-    ----------
-    raw:
-        Dict parsed directly from the LLM JSON response.
-
-    Returns
-    -------
-    dict[str, Any]
-        Complete dict with all ``_FIELDS`` keys present.
+    Based on the document type, use a different extraction prompt to pull out
+    dynamic sets of fields.
+    
+    Returns a predictable structure:
+    {
+      "documentType": str,
+      "extractedFields": dict,
+      "confidence": "high" | "medium" | "low"
+    }
     """
-    result: dict[str, Any] = {}
-    for key in _FIELDS:
-        value = raw.get(key)
-        if key == "supporting_docs" and value is None:
-            value = []
-        result[key] = value
+    
+    # 1. Provide specific instructions based on doc_type
+    if doc_type == "insurance_claim":
+        instructions = "Extract: policy_number, claimant_name, incident_date, estimated_damage, claim_type, incident_description, claim_number, contact_phone, contact_email."
+    elif doc_type == "medical_claim":
+        instructions = "Extract: patient_name, diagnosis, treatment_date, hospital_name, doctor_name, estimated_cost, insurance_id."
+    elif doc_type == "police_report":
+        instructions = "Extract: report_number, officer_name, incident_date, location, involved_parties, incident_description, case_status."
+    elif doc_type == "legal_complaint":
+        instructions = "Extract: case_number, plaintiff, defendant, filing_date, court_name, complaint_description, claimed_damages."
+    elif doc_type == "property_damage":
+        instructions = "Extract: property_address, owner_name, damage_type, incident_date, estimated_repair_cost, contractor_estimate, insurance_carrier."
+    else:
+        instructions = "Extract whatever key entities and meaningful data fields are present in the text dynamically. Return them as key-value pairs."
 
-    logger.info(
-        "Extraction normalised — %d/%d fields populated.",
-        sum(1 for v in result.values() if v not in (None, [])),
-        len(_FIELDS),
-    )
-    return result
-
-
-
+    # 2. Build the full system prompt
+    system_prompt = f"""
+    You are an expert OCR and data extraction agent. 
+    Your task is to extract structured information from the provided raw text, knowing that it is classified as a '{doc_type}'.
+    
+    {instructions}
+    
+    CRITICAL RULES:
+    1. If a value is present anywhere in the text in any format, extract it. Only set an object key to null if it is truly absent.
+    2. Fields may appear anywhere, not just as labeled fields.
+    3. For estimated damage/costs, always return as a plain number (e.g. 12000), no currency symbols.
+    4. You MUST output valid JSON matching this exact structure:
+    {{
+      "documentType": "{doc_type}",
+      "extractedFields": {{
+            // your extracted key-value pairs go here
+      }},
+      "confidence": "high" // or "medium" or "low" based on extraction quality
+    }}
+    """
+    
+    user_message = f"--- DOCUMENT TEXT ---\n{raw_text}\n--- END ---"
+    
+    try:
+        data = await asyncio.to_thread(_call_groq_json, system_prompt, user_message)
+        
+        # Ensure we always return the expected 3-part dictionary format
+        return {
+            "documentType": data.get("documentType", doc_type),
+            "extractedFields": data.get("extractedFields", {}),
+            "confidence": data.get("confidence", "low")
+        }
+    except Exception as exc:
+        logger.error("Failed to extract fields for document type '%s': %s", doc_type, exc)
+        raise

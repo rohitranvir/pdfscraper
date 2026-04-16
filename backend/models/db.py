@@ -22,6 +22,7 @@ Table: claims_history
 | missing_fields_count | INTEGER   | len(missingFields) from response    |
 | estimated_damage     | REAL      | Parsed float, NULL if not extracted |
 | claim_type           | TEXT      | property/vehicle/injury/liability   |
+| doc_type             | TEXT      | The detected document type          |
 | processed_at         | TIMESTAMP | UTC timestamp set at insert time    |
 """
 
@@ -73,6 +74,7 @@ claims_history = Table(
     Column("missing_fields_count", Integer,  nullable=False, default=0),
     Column("estimated_damage",     Float,    nullable=True),
     Column("claim_type",           String,   nullable=True),
+    Column("doc_type",             String,   nullable=True),
     Column(
         "processed_at",
         DateTime(timezone=True),
@@ -130,6 +132,7 @@ async def save_claim(data: dict) -> None:
         - ``missing_fields_count`` (int)           — number of missing fields
         - ``estimated_damage``     (float | None)  — damage estimate
         - ``claim_type``           (str | None)    — claim category
+        - ``doc_type``             (str | None)    — detected document classification
 
     The ``processed_at`` timestamp is always set by the database layer to
     ``datetime.now(timezone.utc)`` and must **not** be supplied by the caller.
@@ -150,6 +153,7 @@ async def save_claim(data: dict) -> None:
         "missing_fields_count": int(data.get("missing_fields_count", 0)),
         "estimated_damage":     _to_float(data.get("estimated_damage")),
         "claim_type":           data.get("claim_type"),
+        "doc_type":             data.get("doc_type", "unknown"),
         "processed_at":         datetime.now(timezone.utc),
     }
 

@@ -1,22 +1,55 @@
 /**
- * ClaimsProcessor.jsx
- * --------------------
- * Main claims processing page.
+ * ClaimsProcessor.jsx — Ethereal Analyst design
  *
- * State machine
- * -------------
- *  idle      → user drops PDF or clicks test
- *  loading   → API in flight  → show LoadingSpinner (replaces buttons)
- *  results   → success        → show ResultsPanel + "Process Another" button
- *  error     → API failure    → show red error card + retry controls
+ * State machine (UNCHANGED)
+ * --------------------------
+ *  idle      → user drops PDF or clicks test scenario
+ *  loading   → API in flight  → show LoadingSpinner
+ *  results   → success        → show ResultsPanel
+ *  error     → API failure    → show error card + retry controls
  */
 
 import { useState, useCallback } from 'react'
-import { UploadCloud, FlaskConical, RotateCcw, AlertCircle } from 'lucide-react'
-import { processClaim, testClaim }  from '../api'
-import DropZone      from '../components/DropZone'
-import ResultsPanel  from '../components/ResultsPanel'
+import { processClaim, testClaim } from '../api'
+import DropZone       from '../components/DropZone'
+import ResultsPanel   from '../components/ResultsPanel'
 import LoadingSpinner from '../components/LoadingSpinner'
+
+/* ── Quick Demo Scenarios config ─────────────────────────────────────── */
+const SCENARIOS = [
+  {
+    id: 'fast_track',
+    label: 'Auto Accident',
+    icon: 'directions_car',
+    color: 'text-secondary',
+    bg: 'hover:bg-secondary/10',
+    border: 'hover:border-secondary/40',
+  },
+  {
+    id: 'specialist',
+    label: 'Medical Bill',
+    icon: 'medical_services',
+    color: 'text-tertiary',
+    bg: 'hover:bg-tertiary/10',
+    border: 'hover:border-tertiary/40',
+  },
+  {
+    id: 'manual_review',
+    label: 'Property Damage',
+    icon: 'home_work',
+    color: 'text-primary',
+    bg: 'hover:bg-primary/10',
+    border: 'hover:border-primary/40',
+  },
+  {
+    id: 'investigation',
+    label: 'Policy Fraud',
+    icon: 'policy',
+    color: 'text-error',
+    bg: 'hover:bg-error/10',
+    border: 'hover:border-error/40',
+  },
+]
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 
@@ -27,12 +60,10 @@ export default function ClaimsProcessor() {
   const [results,         setResults]         = useState(null)
   const [error,           setError]           = useState('')
 
-  /* ── Handlers ────────────────────────────────────────────────────────── */
-
+  /* ── Handlers (UNCHANGED) ────────────────────────────────────────────── */
   const handleFileSelect = useCallback((f) => {
     setFile(f)
     setError('')
-    // Clear previous results when a new file is chosen
     if (f) setResults(null)
   }, [])
 
@@ -52,7 +83,6 @@ export default function ClaimsProcessor() {
 
     try {
       let data
-
       if (mode === 'test') {
         data = await testClaim(scenario)
       } else {
@@ -60,7 +90,6 @@ export default function ClaimsProcessor() {
         formData.append('file', file)
         data = await processClaim(formData)
       }
-
       setResults(data)
     } catch (err) {
       setError(
@@ -77,235 +106,227 @@ export default function ClaimsProcessor() {
      RENDER
   ═══════════════════════════════════════════════════════════════════════ */
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+    <div className="relative min-h-screen bg-[#050816] overflow-x-hidden">
 
-      {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white tracking-tight">
-          Claims Processor
-        </h1>
-        <p className="text-slate-400 mt-1.5 text-sm max-w-xl">
-          Upload any claim document — insurance, medical, legal, police report, or property damage. 
-          The AI extracts structured fields, detects missing data, and routes the claim — in seconds.
-        </p>
-      </div>
+      {/* ── Background glow blobs ─────────────────────────────────────── */}
+      <div className="fixed top-0 left-0 w-[600px] h-[600px] rounded-full bg-primary/10 blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
+      <div className="fixed bottom-0 right-0 w-[500px] h-[500px] rounded-full bg-secondary/5 blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3" />
 
-      {/* ── Two-column layout ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6 items-start">
+      {/* ── Navbar ────────────────────────────────────────────────────── */}
+      <nav className="sticky top-0 z-50 bg-white/5 backdrop-blur-xl border-b border-white/[0.06] shadow-[0_24px_48px_rgba(189,157,255,0.06)]">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-4">
 
-        {/* ── LEFT PANEL: upload + controls ──────────────────────────────── */}
-        <div className="space-y-4">
+          {/* Logo */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="material-symbols-outlined text-2xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+              bolt
+            </span>
+            <span className="font-extrabold text-lg font-jakarta glow-text-purple">
+              Claims Intel
+            </span>
+          </div>
 
-          {/* Upload card */}
-          <div className="glass-card p-6 space-y-5">
-            <p className="section-title">Upload Document</p>
+          {/* Center nav links — hidden on mobile */}
+          <div className="hidden md:flex items-center gap-1">
+            {['Dashboard', 'Analytics', 'History'].map((link) => (
+              <button
+                key={link}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  link === 'Dashboard'
+                    ? 'text-primary border-b-2 border-primary/60 rounded-none pb-[calc(0.5rem-2px)]'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-white/5'
+                }`}
+              >
+                {link}
+              </button>
+            ))}
+          </div>
 
-            <DropZone
-              onFileSelect={handleFileSelect}
-              disabled={isLoading}
-            />
+          {/* Right actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+              <span className="material-symbols-outlined text-xl">notifications</span>
+            </button>
+            <button className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+              <span className="material-symbols-outlined text-xl">settings</span>
+            </button>
+            <button
+              onClick={() => submit('process')}
+              disabled={!file || isLoading}
+              className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary-dim text-on-primary font-bold text-sm shadow-lg hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
+              Process Claim
+            </button>
+          </div>
+        </div>
+      </nav>
 
-            {/* ── Action buttons / loading state ─────────────────────────── */}
-            {isLoading && !loadingScenario ? (
-              /* Full-width loading pill while API in flight */
-              <div className="flex items-center justify-center gap-3 py-3
-                              rounded-xl bg-white/5 border border-white/10">
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="rgba(59,130,246,0.2)" strokeWidth="3" />
-                  <path d="M12 2 A10 10 0 0 1 22 12"
-                        stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-                <span className="text-sm font-medium text-slate-400">
+      {/* ── Main content ──────────────────────────────────────────────── */}
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-8 py-10 sm:py-12">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+
+          {/* ── LEFT PANEL (5 cols) ──────────────────────────────────── */}
+          <div className="xl:col-span-5 space-y-6">
+
+            {/* Heading */}
+            <div>
+              <h1 className="font-extrabold text-5xl font-jakarta leading-tight text-on-surface">
+                Claims <span className="glow-text-purple">Processor</span>
+              </h1>
+              <p className="text-on-surface-variant mt-3 text-sm leading-relaxed max-w-md">
+                Upload any claim document — insurance, medical, legal, police report,
+                or property damage. AI extracts, validates, and routes in seconds.
+              </p>
+            </div>
+
+            {/* DropZone */}
+            <DropZone onFileSelect={handleFileSelect} disabled={isLoading} />
+
+            {/* Process PDF button (mobile-visible, full width) */}
+            <button
+              id="btn-process-pdf"
+              onClick={() => submit('process')}
+              disabled={!file || isLoading}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary-dim text-on-primary font-bold text-base hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isLoading && !loadingScenario ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-on-primary/30 border-t-on-primary animate-spin" />
                   Processing with LLaMA 3.3-70b…
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                {/* Process PDF button */}
-                <button
-                  id="btn-process-pdf"
-                  onClick={() => submit('process')}
-                  disabled={!file || isLoading}
-                  className="btn-primary justify-center w-full"
-                >
-                  <UploadCloud size={17} />
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>upload_file</span>
                   Process PDF
-                </button>
+                </>
+              )}
+            </button>
 
-                {/* Divider */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-white/5" />
-                  <span className="text-xs text-slate-500 font-semibold px-2">Test Scenarios</span>
-                  <div className="flex-1 h-px bg-white/5" />
+            {/* Quick Demo Scenarios */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+                Quick Demo Scenarios
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {SCENARIOS.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => submit('test', s.id)}
+                    disabled={isLoading}
+                    className={`
+                      glass-panel rounded-2xl p-4 flex flex-col items-start gap-2
+                      border border-white/[0.06] ${s.bg} ${s.border}
+                      transition-all duration-200 text-left
+                      disabled:opacity-40 disabled:cursor-not-allowed
+                    `}
+                  >
+                    {loadingScenario === s.id ? (
+                      <div className={`w-5 h-5 rounded-full border-2 border-current/30 border-t-current animate-spin ${s.color}`} />
+                    ) : (
+                      <span
+                        className={`material-symbols-outlined text-2xl ${s.color}`}
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        {s.icon}
+                      </span>
+                    )}
+                    <span className="text-sm font-semibold text-on-surface leading-snug">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT PANEL (7 cols) ─────────────────────────────────── */}
+          <div className="xl:col-span-7 min-h-[400px]">
+
+            {/* Loading */}
+            {isLoading && <LoadingSpinner />}
+
+            {/* Error card */}
+            {!isLoading && error && (
+              <div className="rounded-3xl p-6 glass-panel border border-error/20 bg-error/5 animate-fade-in">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-error/10 border border-error/30 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-error" style={{ fontVariationSettings: "'FILL' 1" }}>error</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-error mb-1">Processing Failed</p>
+                    <p className="text-sm text-on-surface-variant leading-relaxed">{error}</p>
+                    <div className="flex items-center gap-3 mt-4">
+                      <button
+                        onClick={reset}
+                        className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-base">refresh</span>
+                        Try again
+                      </button>
+                      <span className="text-outline-variant">·</span>
+                      <button
+                        onClick={() => submit('test', 'fast_track')}
+                        className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-base">science</span>
+                        Run fast-track test
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              </div>
+            )}
 
-                {/* Test scenarios grid */}
-                <div className="grid grid-cols-2 gap-2 mt-1">
+            {/* Results */}
+            {!isLoading && results && (
+              <div>
+                <div className="flex items-center justify-between mb-5">
+                  <p className="text-sm font-semibold text-on-surface flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Claim processed successfully
+                  </p>
                   <button
-                    onClick={() => submit('test', 'fast_track')}
-                    disabled={isLoading}
-                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-green-500/30"
+                    onClick={reset}
+                    className="flex items-center gap-1.5 text-xs text-on-surface-variant glass-panel px-3 py-1.5 rounded-xl hover:bg-white/[0.05] transition-all"
                   >
-                    {loadingScenario === 'fast_track' ? (
-                      <svg className="animate-spin w-3.5 h-3.5 text-green-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
-                    ) : '🟢 Fast-track Test'}
+                    <span className="material-symbols-outlined text-base">refresh</span>
+                    Process Another
                   </button>
-                  <button
-                    onClick={() => submit('test', 'specialist')}
-                    disabled={isLoading}
-                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-blue-500/30"
-                  >
-                    {loadingScenario === 'specialist' ? (
-                      <svg className="animate-spin w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
-                    ) : '🔵 Specialist Test'}
-                  </button>
-                  <button
-                    onClick={() => submit('test', 'investigation')}
-                    disabled={isLoading}
-                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-red-500/30"
-                  >
-                    {loadingScenario === 'investigation' ? (
-                      <svg className="animate-spin w-3.5 h-3.5 text-red-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
-                    ) : '🔴 Investigation Test'}
-                  </button>
-                  <button
-                    onClick={() => submit('test', 'manual_review')}
-                    disabled={isLoading}
-                    className="btn-secondary justify-center text-[11px] font-medium py-2 px-1 w-full border border-transparent hover:border-yellow-500/30"
-                  >
-                    {loadingScenario === 'manual_review' ? (
-                      <svg className="animate-spin w-3.5 h-3.5 text-yellow-400" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.2" strokeWidth="3" /><path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
-                    ) : '🟡 Manual Review Test'}
-                  </button>
+                </div>
+                <ResultsPanel results={results} />
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!isLoading && !results && !error && (
+              <div className="flex flex-col items-center justify-center text-center gap-6 min-h-[420px] relative">
+                {/* Animated gradient blob */}
+                <div className="absolute w-72 h-72 rounded-full pointer-events-none"
+                  style={{
+                    background: 'radial-gradient(circle, rgba(189,157,255,0.15) 0%, rgba(119,153,255,0.08) 50%, transparent 70%)',
+                    filter: 'blur(40px)',
+                    animation: 'pulse 4s ease-in-out infinite',
+                  }}
+                />
+                {/* Icon */}
+                <div className="relative w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-4xl text-primary/60" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    cloud_upload
+                  </span>
+                </div>
+                {/* Text */}
+                <div>
+                  <p className="font-bold text-2xl font-jakarta text-on-surface">Awaiting Document</p>
+                  <p className="text-sm text-on-surface-variant mt-2 max-w-xs leading-relaxed">
+                    Drop a PDF on the left, or click a{' '}
+                    <span className="text-primary font-medium">Demo Scenario</span>
+                    {' '}to see a live AI analysis.
+                  </p>
                 </div>
               </div>
             )}
           </div>
-
-          {/* How it works card */}
-          <div className="glass-card p-5 space-y-3">
-            <p className="section-title">How It Works</p>
-            {[
-              ['1', 'PDF text extracted via pdfplumber'],
-              ['2', 'Groq LLaMA 3.3-70b extracts 12 structured fields'],
-              ['3', 'Mandatory fields checked for completeness'],
-              ['4', 'Deterministic rules assign a routing decision'],
-              ['5', 'Result persisted to SQLite claims history'],
-            ].map(([n, text]) => (
-              <div key={n} className="flex items-start gap-3">
-                <span className="w-5 h-5 rounded-full bg-accent/15 text-accent
-                                 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                  {n}
-                </span>
-                <p className="text-xs text-slate-400 leading-relaxed">{text}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Routing rules quick reference */}
-          <div className="glass-card p-5 space-y-3">
-            <p className="section-title">Routing Rules</p>
-            {[
-              ['🔴', 'Investigation Flag', 'Fraud keyword in description'],
-              ['🟡', 'Manual Review',      'Any mandatory field missing'],
-              ['🔵', 'Specialist Queue',   'Claim type = injury'],
-              ['🟢', 'Fast-track',         'Damage < $25,000'],
-              ['⚪', 'Standard Review',    'All other claims'],
-            ].map(([emoji, route, rule]) => (
-              <div key={route} className="flex items-start gap-2.5">
-                <span className="text-sm shrink-0 mt-0.5">{emoji}</span>
-                <div>
-                  <span className="text-xs font-semibold text-slate-300">{route}</span>
-                  <span className="text-xs text-slate-600 ml-1.5">— {rule}</span>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-
-        {/* ── RIGHT PANEL: loading / error / results ──────────────────────── */}
-        <div className="min-h-[400px]">
-
-          {/* Loading spinner — full panel */}
-          {isLoading && <LoadingSpinner />}
-
-          {/* Error card */}
-          {!isLoading && error && (
-            <div className="glass-card p-6 border-red-500/20 bg-red-950/20
-                            animate-fade-in">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-red-900/50 border border-red-500/30
-                                flex items-center justify-center shrink-0">
-                  <AlertCircle size={20} className="text-red-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-red-300 mb-1">Processing Failed</p>
-                  <p className="text-sm text-red-400/80 leading-relaxed">{error}</p>
-                  <div className="flex items-center gap-3 mt-4">
-                    <button
-                      onClick={reset}
-                      className="flex items-center gap-1.5 text-xs text-slate-400
-                                 hover:text-white transition-colors"
-                    >
-                      <RotateCcw size={13} />
-                      Try again
-                    </button>
-                    <span className="text-slate-700">·</span>
-                    <button
-                      onClick={() => submit('test', 'fast_track')}
-                      className="flex items-center gap-1.5 text-xs text-slate-400
-                                 hover:text-white transition-colors"
-                    >
-                      <FlaskConical size={13} />
-                      Run fast-track test
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Results panel */}
-          {!isLoading && results && (
-            <div>
-              {/* "Process Another" bar */}
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-semibold text-slate-300">
-                  Claim processed successfully
-                </p>
-                <button
-                  onClick={reset}
-                  className="btn-secondary text-xs py-1.5 px-3"
-                >
-                  <RotateCcw size={13} />
-                  Process Another
-                </button>
-              </div>
-              <ResultsPanel results={results} />
-            </div>
-          )}
-
-          {/* Empty state — no results, no error, not loading */}
-          {!isLoading && !results && !error && (
-            <div className="glass-card p-10 flex flex-col items-center justify-center
-                            text-center gap-5 min-h-[400px]">
-              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
-                <UploadCloud size={28} className="text-slate-700" />
-              </div>
-              <div>
-                <p className="font-semibold text-slate-500 text-base">
-                  Awaiting a claim document
-                </p>
-                <p className="text-sm text-slate-700 mt-1.5 max-w-xs">
-                  Drop a PDF on the left, or click a{' '}
-                  <span className="text-accent-light font-medium">Test Scenario</span>
-                  {' '}to see a live demo.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      </main>
     </div>
   )
 }

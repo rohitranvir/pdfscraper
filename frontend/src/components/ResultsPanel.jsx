@@ -1,166 +1,223 @@
 /**
- * ResultsPanel.jsx
- * ----------------
- * Renders the complete pipeline output, top-to-bottom:
- *   1. StatusBadge (large, centered)
- *   2. Reasoning card
- *   3. MissingFieldsList
- *   4. ExtractedFieldsTable
- *
- * Props
- * -----
- * results : {
- *   extractedFields  : object
- *   missingFields    : string[]
- *   recommendedRoute : string
- *   reasoning        : string
- * }
+ * ResultsPanel.jsx — Ethereal Analyst design
+ * Props: results { extractedFields, missingFields, recommendedRoute, reasoning,
+ *                  documentType, confidence, completenessScore }
  */
 
 import { useState } from 'react'
-import { Brain, ChevronDown, ChevronUp, FileSearch, AlertTriangle } from 'lucide-react'
 import StatusBadge         from './StatusBadge'
 import MissingFieldsList   from './MissingFieldsList'
 import ExtractedFieldsTable from './ExtractedFieldsTable'
 
-/* ── Collapsible section wrapper ──────────────────────────────────────── */
-function Section({ icon: Icon, title, badge, children, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen)
+/* ── Raw JSON collapsible section ─────────────────────────────────── */
+function RawJsonSection({ results }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const json = JSON.stringify(results, null, 2)
+
+  const copy = () => {
+    navigator.clipboard.writeText(json).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] overflow-hidden">
+    <div className="glass-panel rounded-2xl overflow-hidden">
+      {/* Toggle header */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-5 py-4
-                   hover:bg-white/[0.03] transition-colors text-left"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors"
       >
-        <div className="flex items-center gap-2.5">
-          <Icon size={15} className="text-slate-500" />
-          <span className="font-semibold text-sm text-white">{title}</span>
-          {badge && (
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full
-                             bg-red-900/40 text-red-400 ring-1 ring-red-500/30">
-              {badge}
-            </span>
-          )}
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-xl text-on-surface-variant" style={{ fontVariationSettings: "'FILL' 1" }}>
+            data_object
+          </span>
+          <span className="text-sm font-semibold text-on-surface">Raw JSON Response</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 ml-1">
+            API
+          </span>
         </div>
-        {open
-          ? <ChevronUp   size={15} className="text-slate-600 shrink-0" />
-          : <ChevronDown size={15} className="text-slate-600 shrink-0" />
-        }
+        <span className="material-symbols-outlined text-lg text-on-surface-variant transition-transform duration-200" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          expand_more
+        </span>
       </button>
 
+      {/* JSON body */}
       {open && (
-        <div className="px-5 pb-5 pt-1 border-t border-white/5">
-          {children}
+        <div className="border-t border-white/5">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between px-5 py-2 bg-surface-container-low">
+            <span className="text-xs text-on-surface-variant font-mono">application/json</span>
+            <button
+              onClick={copy}
+              className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-primary/10"
+            >
+              <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: copied ? "'FILL' 1" : "'FILL' 0" }}>
+                {copied ? 'check_circle' : 'content_copy'}
+              </span>
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          {/* Pre block */}
+          <pre className="text-[11px] leading-relaxed font-mono text-on-surface-variant bg-black/30 p-5 overflow-auto max-h-80 border-t border-white/5">
+            {json}
+          </pre>
         </div>
       )}
     </div>
   )
 }
 
-/* ── Main component ───────────────────────────────────────────────────── */
+/* ── Route Decision card gradient map ─────────────────────────────── */
+function getRouteGradient(route = '') {
+  const r = route.toLowerCase()
+  if (r.includes('fast'))       return 'from-emerald-900/40 via-surface-container to-surface-container-high'
+  if (r.includes('specialist')) return 'from-secondary-dim/20 via-surface-container to-surface-container-high'
+  if (r.includes('invest') || r.includes('flag')) return 'from-error/20 via-surface-container to-surface-container-high'
+  if (r.includes('manual'))     return 'from-amber-900/30 via-surface-container to-surface-container-high'
+  return 'from-primary/20 via-surface-container to-surface-container-high'
+}
+
+function formatDocType(raw) {
+  if (!raw) return 'Unknown'
+  return raw.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
 export default function ResultsPanel({ results }) {
-  const { extractedFields, missingFields, recommendedRoute, reasoning, documentType, confidence, completenessScore } = results
+  const {
+    extractedFields, missingFields, recommendedRoute,
+    reasoning, documentType, confidence, completenessScore
+  } = results
 
-  const confidenceColor = {
-    high: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]',
-    medium: 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]',
-    low: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]',
-  }[confidence?.toLowerCase() || 'low'] || 'bg-slate-500'
+  const confidenceDot = {
+    high:   'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]',
+    medium: 'bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.8)]',
+    low:    'bg-error shadow-[0_0_6px_rgba(255,110,132,0.8)]',
+  }[confidence?.toLowerCase() || 'low'] || 'bg-outline-variant'
 
-  const docTypeLabel = (documentType || 'unknown')
-    .split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  const completeness = completenessScore || 0
+  const completenessColor = completeness === 100
+    ? 'bg-emerald-400'
+    : completeness > 60
+    ? 'bg-yellow-400'
+    : 'bg-error'
 
   return (
-    <div
-      className="space-y-4"
-      style={{ animation: 'slideUp 0.45s ease-out forwards' }}
-    >
+    <div className="space-y-4 animate-fade-in">
 
-      {/* ── 0. Meta data row (Document type, Confidence, Completeness) ──── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
-        
-        <div className="flex items-center gap-3">
-          {/* Doc type pill */}
-          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-full">
-            {docTypeLabel}
+      {/* ── 1. ROUTE DECISION CARD ─────────────────────────────────── */}
+      <div className={`relative rounded-3xl p-6 sm:p-8 bg-gradient-to-br ${getRouteGradient(recommendedRoute)} border border-white/10 glow-shadow-primary overflow-hidden`}>
+        {/* Decorative blur blob bottom-right */}
+        <div className="absolute -bottom-8 -right-8 w-48 h-48 rounded-full bg-primary/15 blur-[60px] pointer-events-none" />
+
+        {/* AI PROCESSED badge */}
+        <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-tertiary-container/20 border border-tertiary-container/40">
+          <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-tertiary">AI Processed</span>
+        </div>
+
+        {/* Meta row: doc type + confidence + completeness */}
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          {/* Document type pill */}
+          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/20">
+            {formatDocType(documentType)}
           </span>
           {/* Confidence */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
-            <span className={`w-2 h-2 rounded-full ${confidenceColor}`}></span>
-            <span className="text-xs font-medium text-slate-300 capitalize">{confidence} Confidence</span>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full glass-panel">
+            <span className={`w-2 h-2 rounded-full ${confidenceDot}`} />
+            <span className="text-xs font-medium text-on-surface-variant capitalize">{confidence || 'unknown'} confidence</span>
           </div>
         </div>
 
-        {/* Completeness */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-slate-400">Completeness</span>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <div 
-                 className={`h-full rounded-full transition-all duration-1000 ${completenessScore === 100 ? 'bg-emerald-500' : completenessScore > 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                 style={{ width: `${completenessScore || 0}%` }}
-              />
-            </div>
-            <span className="text-xs font-bold text-white w-8 text-right">{completenessScore || 0}%</span>
+        {/* Route label + name */}
+        <p className="text-xs uppercase tracking-widest font-semibold text-on-surface-variant mb-2">
+          Route Decision
+        </p>
+        <p className="font-extrabold text-3xl sm:text-4xl font-jakarta text-on-surface leading-tight mb-5">
+          {recommendedRoute}
+        </p>
+
+        {/* Completeness bar */}
+        <div className="flex items-center gap-3 mb-5">
+          <span className="text-xs text-on-surface-variant shrink-0">Completeness</span>
+          <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${completenessColor}`}
+              style={{ width: `${completeness}%` }}
+            />
           </div>
+          <span className="text-xs font-bold text-on-surface w-8 text-right shrink-0">{completeness}%</span>
+        </div>
+
+        {/* Reasoning */}
+        <div className="glass-panel rounded-xl p-4">
+          <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2 font-semibold">Routing Reasoning</p>
+          <p className="text-sm text-on-surface leading-relaxed">{reasoning}</p>
         </div>
       </div>
 
-      {/* ── 1. Status badge — large, centered ─────────────────────────── */}
-      <StatusBadge route={recommendedRoute} large />
+      {/* ── 2. EXTRACTED ENTITY DATA ──────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-xl text-on-surface-variant" style={{ fontVariationSettings: "'FILL' 1" }}>
+            data_object
+          </span>
+          <h2 className="text-sm font-semibold text-on-surface">Extracted Entity Data</h2>
+        </div>
+        <ExtractedFieldsTable fields={extractedFields} />
+      </div>
 
-      {/* ── 2. Reasoning ─────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] px-5 py-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Brain size={14} className="text-slate-500" />
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
-            Routing Reasoning
+      {/* ── 3. REQUIRED ACTION (Missing Fields) ───────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-xl text-error" style={{ fontVariationSettings: "'FILL' 1" }}>
+            warning
+          </span>
+          <h2 className="text-sm font-semibold text-on-surface">Required Action</h2>
+        </div>
+        <MissingFieldsList missingFields={missingFields} />
+      </div>
+
+      {/* ── 4. REAL-TIME VERIFICATION ─────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-xl text-on-surface-variant" style={{ fontVariationSettings: "'FILL' 1" }}>
+            analytics
+          </span>
+          <h2 className="text-sm font-semibold text-on-surface">Real-Time Verification</h2>
+        </div>
+        <div className="glass-panel rounded-2xl p-6 flex flex-col items-center gap-4">
+          <div className="relative w-12 h-12">
+            <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary animate-spin" />
+          </div>
+          <p className="text-xs text-on-surface-variant text-center">
+            {missingFields.length === 0
+              ? 'All checks passed — document is complete'
+              : `${missingFields.length} field(s) require manual submission`}
           </p>
         </div>
-        <p className="text-sm text-slate-300 leading-relaxed">
-          {reasoning}
-        </p>
       </div>
 
-      {/* ── 3. Missing fields ────────────────────────────────────────── */}
-      <Section
-        icon={AlertTriangle}
-        title="Missing Fields"
-        badge={missingFields.length > 0 ? missingFields.length : null}
-        defaultOpen={true}
-      >
-        <MissingFieldsList missingFields={missingFields} />
-      </Section>
+      {/* ── 5. RAW JSON RESPONSE (collapsible) ───────────────────── */}
+      <RawJsonSection results={results} />
 
-      {/* ── 4. Extracted fields table ─────────────────────────────────── */}
-      <Section
-        icon={FileSearch}
-        title="Extracted Fields"
-        defaultOpen={true}
-      >
-        <ExtractedFieldsTable
-          fields={extractedFields}
-          missingFields={missingFields}
-        />
-      </Section>
-
-      {/* ── 5. Raw JSON (collapsed by default) ───────────────────────── */}
-      <Section
-        icon={Brain}
-        title="Raw JSON Response"
-        defaultOpen={false}
-      >
-        <pre className="
-          text-[11px] leading-relaxed font-mono
-          text-slate-400 bg-black/30 rounded-xl p-4
-          overflow-auto max-h-72
-          border border-white/5
-        ">
-          {JSON.stringify(results, null, 2)}
-        </pre>
-      </Section>
+      {/* ── 6. FOOTER ACTIONS ─────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-3 pt-2">
+        <button className="flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 bg-primary text-on-primary font-bold rounded-xl hover:brightness-110 transition-all">
+          <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+          Confirm &amp; Dispatch
+        </button>
+        <button className="flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 glass-panel text-on-surface font-medium rounded-xl hover:bg-white/[0.06] transition-all">
+          <span className="material-symbols-outlined text-xl">edit</span>
+          Manual Override
+        </button>
+        <button className="flex items-center gap-1.5 px-4 py-3 text-on-surface-variant text-sm rounded-xl hover:text-error transition-all">
+          <span className="material-symbols-outlined text-lg">delete</span>
+          Discard Analysis
+        </button>
+      </div>
     </div>
   )
 }

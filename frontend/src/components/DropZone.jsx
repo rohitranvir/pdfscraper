@@ -1,19 +1,10 @@
 /**
- * DropZone.jsx
- * ------------
- * Drag-and-drop PDF upload zone with three visual states:
- *   idle        — neutral dashed border, upload icon
- *   drag-over   — blue glow border, scale up
- *   selected    — green border, filename + size + remove button
- *
- * Props
- * -----
- * onFileSelect : (file: File) => void   — called when a valid PDF is chosen
- * disabled     : bool                   — lock the zone during processing
+ * DropZone.jsx — Ethereal Analyst design
+ * Drag-and-drop PDF upload zone.
+ * Props: onFileSelect, disabled
  */
 
 import { useRef, useState, useCallback } from 'react'
-import { UploadCloud, FileText, X, AlertCircle } from 'lucide-react'
 
 const ACCEPTED_TYPES = new Set(['application/pdf'])
 
@@ -33,10 +24,9 @@ function formatBytes(bytes) {
 export default function DropZone({ onFileSelect, disabled = false }) {
   const inputRef = useRef(null)
   const [dragging,  setDragging]  = useState(false)
-  const [selected,  setSelected]  = useState(null)   // File | null
+  const [selected,  setSelected]  = useState(null)
   const [error,     setError]     = useState('')
 
-  /* ── File acceptance logic ─────────────────────────────────────────── */
   const acceptFile = useCallback((file) => {
     if (!file) return
     if (!isValidPdf(file)) {
@@ -48,8 +38,7 @@ export default function DropZone({ onFileSelect, disabled = false }) {
     onFileSelect(file)
   }, [onFileSelect])
 
-  /* ── Drag handlers ─────────────────────────────────────────────────── */
-  const onDragOver  = (e) => { e.preventDefault(); if (!disabled) setDragging(true)  }
+  const onDragOver  = (e) => { e.preventDefault(); if (!disabled) setDragging(true) }
   const onDragLeave = (e) => { e.preventDefault(); setDragging(false) }
   const onDrop      = (e) => {
     e.preventDefault()
@@ -58,13 +47,11 @@ export default function DropZone({ onFileSelect, disabled = false }) {
     acceptFile(e.dataTransfer.files?.[0])
   }
 
-  /* ── Input change handler ──────────────────────────────────────────── */
   const onInputChange = (e) => {
     acceptFile(e.target.files?.[0])
-    e.target.value = ''   // allow re-selecting same file
+    e.target.value = ''
   }
 
-  /* ── Clear ──────────────────────────────────────────────────────────── */
   const clear = (e) => {
     e.stopPropagation()
     setSelected(null)
@@ -72,66 +59,35 @@ export default function DropZone({ onFileSelect, disabled = false }) {
     onFileSelect(null)
   }
 
-  /* ── Click to open picker ──────────────────────────────────────────── */
   const openPicker = () => {
     if (!disabled) inputRef.current?.click()
   }
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     SELECTED STATE — green border, filename + size + remove
-  ═══════════════════════════════════════════════════════════════════════ */
+  /* ── SELECTED STATE ── */
   if (selected) {
     return (
-      <div
-        className={`
-          relative rounded-2xl border-2 border-emerald-500/50
-          bg-emerald-900/10 px-5 py-4
-          flex items-center gap-4
-          transition-all duration-200
-          ${disabled ? 'opacity-60' : ''}
-        `}
-      >
-        {/* PDF icon */}
-        <div className="w-12 h-12 rounded-xl bg-emerald-900/40 border border-emerald-500/30
-                        flex items-center justify-center shrink-0">
-          <FileText size={22} className="text-emerald-400" />
+      <div className={`relative rounded-3xl border-2 border-emerald-400/60 bg-emerald-900/10 px-5 py-4 flex items-center gap-4 transition-all duration-300 ${disabled ? 'opacity-60' : ''}`}>
+        <div className="w-12 h-12 rounded-2xl bg-emerald-900/40 border border-emerald-500/30 flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-emerald-400 text-2xl">description</span>
         </div>
-
-        {/* File info */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-white text-sm truncate" title={selected.name}>
-            {selected.name}
-          </p>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {formatBytes(selected.size)} &bull; PDF document
-          </p>
+          <p className="font-semibold text-on-surface text-sm truncate" title={selected.name}>{selected.name}</p>
+          <p className="text-xs text-on-surface-variant mt-0.5">{formatBytes(selected.size)} · PDF document</p>
         </div>
-
-        {/* Remove button */}
         {!disabled && (
-          <button
-            onClick={clear}
-            aria-label="Remove selected file"
-            className="p-2 rounded-lg text-slate-500 hover:text-red-400
-                       hover:bg-red-900/20 transition-colors shrink-0"
-          >
-            <X size={18} />
+          <button onClick={clear} aria-label="Remove selected file" className="p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error/10 transition-all shrink-0">
+            <span className="material-symbols-outlined text-xl">close</span>
           </button>
         )}
-
-        {/* Top-right confirmed badge */}
-        <span className="absolute top-3 right-3 flex items-center gap-1 text-[10px]
-                         font-bold text-emerald-400 uppercase tracking-wider">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+        <span className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           Ready
         </span>
       </div>
     )
   }
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     IDLE / DRAG-OVER STATE
-  ═══════════════════════════════════════════════════════════════════════ */
+  /* ── IDLE / DRAG-OVER STATE ── */
   return (
     <div>
       <div
@@ -144,58 +100,56 @@ export default function DropZone({ onFileSelect, disabled = false }) {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         className={`
-          relative rounded-2xl border-2 border-dashed
-          flex flex-col items-center justify-center gap-4
-          px-8 py-12 cursor-pointer select-none
-          transition-all duration-200 outline-none
-          focus-visible:ring-2 focus-visible:ring-accent
-
-          ${dragging
-            ? 'border-blue-400/70 bg-blue-900/15 scale-[1.015] shadow-glow'
-            : 'border-white/10 hover:border-accent/40 hover:bg-white/[0.02]'}
+          group relative dashed-gradient-border
+          h-80 flex flex-col items-center justify-center gap-5
+          cursor-pointer select-none
+          transition-all duration-300 outline-none
+          ${dragging ? 'bg-primary/5 scale-[1.01]' : 'hover:bg-primary/[0.02]'}
           ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}
         `}
-        style={dragging ? { boxShadow: '0 0 0 4px rgba(59,130,246,0.18), 0 0 32px rgba(59,130,246,0.15)' } : {}}
       >
+        {/* background glow blob */}
+        <div className="absolute -z-10 w-48 h-48 rounded-full bg-primary/10 blur-[60px] pointer-events-none" />
+
         {/* Upload icon */}
         <div className={`
-          w-16 h-16 rounded-2xl flex items-center justify-center
-          transition-all duration-200
-          ${dragging ? 'bg-blue-900/40 scale-110' : 'bg-white/5'}
+          w-20 h-20 rounded-full flex items-center justify-center
+          bg-primary/10 transition-all duration-500
+          ${dragging ? 'bg-primary/20 scale-110' : 'group-hover:scale-110 group-hover:bg-primary/15'}
         `}>
-          <UploadCloud
-            size={30}
-            className={`transition-colors duration-200 ${dragging ? 'text-blue-400' : 'text-slate-600'}`}
-          />
+          <span
+            className={`material-symbols-outlined text-5xl transition-colors duration-300 ${dragging ? 'text-primary' : 'text-primary/70 group-hover:text-primary'}`}
+            style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48" }}
+          >
+            upload_file
+          </span>
         </div>
 
         {/* Text */}
         <div className="text-center space-y-1.5">
-          <p className={`font-semibold text-base transition-colors ${dragging ? 'text-blue-300' : 'text-slate-300'}`}>
-            {dragging ? 'Release to upload' : 'Drag & drop your PDF here'}
+          <p className={`font-semibold text-xl transition-colors ${dragging ? 'text-primary' : 'text-on-surface'}`}>
+            {dragging ? 'Release to upload' : 'Drag documents here'}
           </p>
-          <p className="text-sm text-slate-500">
-            or{' '}
-            <span className="text-accent-light underline underline-offset-2">
-              click to browse
-            </span>
+          <p className="text-sm text-on-surface-variant">
+            PDF, JPG or PNG (Max 50MB)
           </p>
-          <p className="text-xs text-slate-700 pt-1">
-            FNOL &bull; Insurance Claims &bull; Policy Documents
-          </p>
+          {!dragging && (
+            <p className="text-xs text-on-surface-variant/50 pt-1">
+              or <span className="text-primary underline underline-offset-2">click to browse</span>
+            </p>
+          )}
         </div>
 
-        {/* Drag-over overlay ripple */}
+        {/* Drag-over ripple overlay */}
         {dragging && (
-          <div className="absolute inset-0 rounded-2xl pointer-events-none
-                          border-2 border-blue-400/30 animate-pulse" />
+          <div className="absolute inset-0 rounded-3xl pointer-events-none border-2 border-primary/30 animate-pulse" />
         )}
       </div>
 
       {/* Error message */}
       {error && (
-        <div className="mt-2.5 flex items-start gap-2 text-sm text-red-400">
-          <AlertCircle size={15} className="shrink-0 mt-0.5" />
+        <div className="mt-2.5 flex items-start gap-2 text-sm text-error">
+          <span className="material-symbols-outlined text-base shrink-0 mt-0.5">error</span>
           <span>{error}</span>
         </div>
       )}

@@ -8,8 +8,33 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        jakarta: ['"Plus Jakarta Sans"', 'sans-serif'],
       },
       colors: {
+        background: '#0a0d1c',
+        surface: '#0a0d1c',
+        'surface-container-low': '#0e1322',
+        'surface-container': '#14192a',
+        'surface-container-high': '#1a1f32',
+        'surface-container-highest': '#1f253a',
+        primary: '#bd9dff',
+        'primary-dim': '#8a4cfc',
+        'primary-container': '#b28cff',
+        'on-primary': '#3c0089',
+        secondary: '#7799ff',
+        'secondary-dim': '#316bf3',
+        tertiary: '#8ce7ff',
+        'tertiary-container': '#53ddfc',
+        'on-tertiary-container': '#004b58',
+        'on-surface': '#e2e4f9',
+        'on-surface-variant': '#a7aabe',
+        error: '#ff6e84',
+        'error-container': '#a70138',
+        'on-error-container': '#ffb2b9',
+        'outline-variant': '#444758',
+        'surface-tint': '#bd9dff',
+        
+        // existing legacy fallback variables just in case
         navy: {
           950: '#020817',
           900: '#0a0f1e',
@@ -24,21 +49,26 @@ export default {
           glow:    'rgba(59,130,246,0.25)',
         },
         route: {
-          fast:        '#10b981',  // emerald
-          manual:      '#f59e0b',  // amber
-          specialist:  '#3b82f6',  // blue
-          flag:        '#ef4444',  // red
-          standard:    '#8b5cf6',  // violet
+          fast:        '#10b981',  
+          manual:      '#f59e0b',  
+          specialist:  '#3b82f6',  
+          flag:        '#ef4444',  
+          standard:    '#8b5cf6',  
         },
       },
       backdropBlur: {
         xs: '2px',
+        xl: '24px',
+      },
+      blur: {
+        '120': '120px',
       },
       animation: {
-        'fade-in':    'fadeIn 0.4s ease-out forwards',
+        'fade-in':    'fadeIn 1s ease-out forwards',
         'slide-up':   'slideUp 0.45s ease-out forwards',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
         'shimmer':    'shimmer 1.5s infinite',
+        'spin-slow':  'spin 3s linear infinite',
       },
       keyframes: {
         fadeIn: {
@@ -61,5 +91,7 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('tailwindcss-animate'),
+  ],
 }

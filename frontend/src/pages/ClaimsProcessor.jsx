@@ -15,42 +15,6 @@ import DropZone       from '../components/DropZone'
 import ResultsPanel   from '../components/ResultsPanel'
 import LoadingSpinner from '../components/LoadingSpinner'
 
-/* ── Quick Demo Scenarios config ─────────────────────────────────────── */
-const SCENARIOS = [
-  {
-    id: 'fast_track',
-    label: 'Auto Accident',
-    icon: 'directions_car',
-    color: 'text-secondary',
-    bg: 'hover:bg-secondary/10',
-    border: 'hover:border-secondary/40',
-  },
-  {
-    id: 'specialist',
-    label: 'Medical Bill',
-    icon: 'medical_services',
-    color: 'text-tertiary',
-    bg: 'hover:bg-tertiary/10',
-    border: 'hover:border-tertiary/40',
-  },
-  {
-    id: 'manual_review',
-    label: 'Property Damage',
-    icon: 'home_work',
-    color: 'text-primary',
-    bg: 'hover:bg-primary/10',
-    border: 'hover:border-primary/40',
-  },
-  {
-    id: 'investigation',
-    label: 'Policy Fraud',
-    icon: 'policy',
-    color: 'text-error',
-    bg: 'hover:bg-error/10',
-    border: 'hover:border-error/40',
-  },
-]
-
 /* ═══════════════════════════════════════════════════════════════════════ */
 
 export default function ClaimsProcessor() {
@@ -209,31 +173,61 @@ export default function ClaimsProcessor() {
                 Quick Demo Scenarios
               </p>
               <div className="grid grid-cols-2 gap-2.5">
-                {SCENARIOS.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => submit('test', s.id)}
-                    disabled={isLoading}
-                    className={`
-                      glass-panel rounded-2xl p-4 flex flex-col items-start gap-2
-                      border border-white/[0.06] ${s.bg} ${s.border}
-                      transition-all duration-200 text-left
-                      disabled:opacity-40 disabled:cursor-not-allowed
-                    `}
-                  >
-                    {loadingScenario === s.id ? (
-                      <div className={`w-5 h-5 rounded-full border-2 border-current/30 border-t-current animate-spin ${s.color}`} />
-                    ) : (
-                      <span
-                        className={`material-symbols-outlined text-2xl ${s.color}`}
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        {s.icon}
-                      </span>
-                    )}
-                    <span className="text-sm font-semibold text-on-surface leading-snug">{s.label}</span>
-                  </button>
-                ))}
+                {/* Button 1: Auto Accident */}
+                <button
+                  onClick={() => submit('test', 'fast_track')}
+                  disabled={isLoading}
+                  className="glass-panel rounded-2xl p-4 flex flex-col items-start gap-2 border border-white/[0.06] hover:bg-secondary/10 hover:border-secondary/40 transition-all duration-200 text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {loadingScenario === 'fast_track' ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-current/30 border-t-current animate-spin text-secondary" />
+                  ) : (
+                    <span className="material-symbols-outlined text-2xl text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>directions_car</span>
+                  )}
+                  <span className="text-sm font-semibold text-on-surface leading-snug">Auto Accident</span>
+                </button>
+
+                {/* Button 2: Medical Bill */}
+                <button
+                  onClick={() => submit('test', 'specialist')}
+                  disabled={isLoading}
+                  className="glass-panel rounded-2xl p-4 flex flex-col items-start gap-2 border border-white/[0.06] hover:bg-tertiary/10 hover:border-tertiary/40 transition-all duration-200 text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {loadingScenario === 'specialist' ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-current/30 border-t-current animate-spin text-tertiary" />
+                  ) : (
+                    <span className="material-symbols-outlined text-2xl text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>medical_services</span>
+                  )}
+                  <span className="text-sm font-semibold text-on-surface leading-snug">Medical Bill</span>
+                </button>
+
+                {/* Button 3: Property Damage */}
+                <button
+                  onClick={() => submit('test', 'manual_review')}
+                  disabled={isLoading}
+                  className="glass-panel rounded-2xl p-4 flex flex-col items-start gap-2 border border-white/[0.06] hover:bg-primary/10 hover:border-primary/40 transition-all duration-200 text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {loadingScenario === 'manual_review' ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-current/30 border-t-current animate-spin text-primary" />
+                  ) : (
+                    <span className="material-symbols-outlined text-2xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>home_work</span>
+                  )}
+                  <span className="text-sm font-semibold text-on-surface leading-snug">Property Damage</span>
+                </button>
+
+                {/* Button 4: Policy Fraud */}
+                <button
+                  onClick={() => submit('test', 'investigation')}
+                  disabled={isLoading}
+                  className="glass-panel rounded-2xl p-4 flex flex-col items-start gap-2 border border-white/[0.06] hover:bg-error/10 hover:border-error/40 transition-all duration-200 text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {loadingScenario === 'investigation' ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-current/30 border-t-current animate-spin text-error" />
+                  ) : (
+                    <span className="material-symbols-outlined text-2xl text-error" style={{ fontVariationSettings: "'FILL' 1" }}>policy</span>
+                  )}
+                  <span className="text-sm font-semibold text-on-surface leading-snug">Policy Fraud</span>
+                </button>
               </div>
             </div>
           </div>

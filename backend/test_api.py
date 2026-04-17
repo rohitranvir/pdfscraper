@@ -1,18 +1,3 @@
-"""
-test_api.py
------------
-Smoke-test suite for the Insurance Claims Agent backend.
-
-Run with:
-    python test_api.py
-
-Requirements:
-    pip install httpx
-
-The backend must be running:
-    uvicorn main:app --reload --host 0.0.0.0 --port 8000
-"""
-
 import json
 import sys
 import textwrap

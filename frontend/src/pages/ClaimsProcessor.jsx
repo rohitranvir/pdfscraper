@@ -82,10 +82,10 @@ export default function ClaimsProcessor() {
 
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className="material-symbols-outlined text-2xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+            <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1", color: '#bd9dff' }}>
               bolt
             </span>
-            <span className="font-extrabold text-lg font-jakarta glow-text-purple">
+            <span className="font-extrabold text-lg font-jakarta text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
               Claims Intel
             </span>
           </div>
@@ -128,7 +128,7 @@ export default function ClaimsProcessor() {
 
       {/* ── Main content ──────────────────────────────────────────────── */}
       <main className="max-w-[1600px] mx-auto px-4 sm:px-8 py-10 sm:py-12">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        <div className="relative z-10 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
 
           {/* ── LEFT PANEL (5 cols) ──────────────────────────────────── */}
           <div className="xl:col-span-5 space-y-6">
@@ -286,7 +286,7 @@ export default function ClaimsProcessor() {
                     Process Another
                   </button>
                 </div>
-                <ResultsPanel results={results} />
+                <ResultsPanel results={results} onReset={reset} />
               </div>
             )}
 
@@ -294,7 +294,7 @@ export default function ClaimsProcessor() {
             {!isLoading && !results && !error && (
               <div className="flex flex-col items-center justify-center text-center gap-6 min-h-[420px] relative">
                 {/* Animated gradient blob */}
-                <div className="absolute w-72 h-72 rounded-full pointer-events-none"
+                <div className="absolute -z-10 w-72 h-72 rounded-full pointer-events-none"
                   style={{
                     background: 'radial-gradient(circle, rgba(189,157,255,0.15) 0%, rgba(119,153,255,0.08) 50%, transparent 70%)',
                     filter: 'blur(40px)',

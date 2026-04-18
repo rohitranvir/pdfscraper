@@ -1,11 +1,10 @@
 /**
  * ResultsPanel.jsx — Ethereal Analyst design
  * Props: results { extractedFields, missingFields, recommendedRoute, reasoning,
- *                  documentType, confidence, completenessScore }
+ *                  documentType, confidence, completenessScore }, onReset
  */
 
 import { useState } from 'react'
-import StatusBadge         from './StatusBadge'
 import MissingFieldsList   from './MissingFieldsList'
 import ExtractedFieldsTable from './ExtractedFieldsTable'
 
@@ -84,11 +83,20 @@ function formatDocType(raw) {
   return raw.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
-export default function ResultsPanel({ results }) {
+export default function ResultsPanel({ results, onReset }) {
   const {
     extractedFields, missingFields, recommendedRoute,
     reasoning, documentType, confidence, completenessScore
   } = results
+
+  const handleConfirm = () => {
+    alert("Claim dispatched successfully");
+    if (onReset) onReset();
+  };
+
+  const handleManual = () => {
+    alert("Claim flagged for manual review");
+  };
 
   const confidenceDot = {
     high:   'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]',
@@ -188,15 +196,25 @@ export default function ResultsPanel({ results }) {
           <h2 className="text-sm font-semibold text-on-surface">Real-Time Verification</h2>
         </div>
         <div className="glass-panel rounded-2xl p-6 flex flex-col items-center gap-4">
-          <div className="relative w-12 h-12">
-            <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
-            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary animate-spin" />
-          </div>
-          <p className="text-xs text-on-surface-variant text-center">
-            {missingFields.length === 0
-              ? 'All checks passed — document is complete'
-              : `${missingFields.length} field(s) require manual submission`}
-          </p>
+          {missingFields.length === 0 ? (
+            <>
+              <div className="relative w-12 h-12 flex items-center justify-center">
+                <span className="material-symbols-outlined text-5xl text-emerald-400">check_circle</span>
+              </div>
+              <p className="text-sm font-semibold text-emerald-400 text-center">
+                All checks passed — document is complete
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="relative w-12 h-12 flex items-center justify-center">
+                <span className="material-symbols-outlined text-5xl text-amber-500">warning</span>
+              </div>
+              <p className="text-sm font-semibold text-amber-500 text-center">
+                Manual verification required
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -205,15 +223,15 @@ export default function ResultsPanel({ results }) {
 
       {/* ── 6. FOOTER ACTIONS ─────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 pt-2">
-        <button className="flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 bg-primary text-on-primary font-bold rounded-xl hover:brightness-110 transition-all">
+        <button onClick={handleConfirm} className="flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 bg-primary text-on-primary font-bold rounded-xl hover:brightness-110 transition-all">
           <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
           Confirm &amp; Dispatch
         </button>
-        <button className="flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 glass-panel text-on-surface font-medium rounded-xl hover:bg-white/[0.06] transition-all">
+        <button onClick={handleManual} className="flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 glass-panel text-on-surface font-medium rounded-xl hover:bg-white/[0.06] transition-all">
           <span className="material-symbols-outlined text-xl">edit</span>
           Manual Override
         </button>
-        <button className="flex items-center gap-1.5 px-4 py-3 text-on-surface-variant text-sm rounded-xl hover:text-error transition-all">
+        <button onClick={onReset} className="flex items-center gap-1.5 px-4 py-3 text-on-surface-variant text-sm rounded-xl hover:text-error transition-all">
           <span className="material-symbols-outlined text-lg">delete</span>
           Discard Analysis
         </button>

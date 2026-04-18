@@ -57,4 +57,71 @@ export async function getHistory() {
   return data
 }
 
+/**
+ * POST /api/claims/dispatch
+ * Submit a claim for fast-track or standard dispatch.
+ * @param {string} claimId 
+ * @param {string} route 
+ * @param {object} extractedFields 
+ */
+export async function dispatchClaim(claimId, route, extractedFields) {
+  try {
+    const { data } = await api.post('/api/claims/dispatch', {
+      claim_id: String(claimId),
+      route,
+      extractedFields,
+    })
+    return data
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * POST /api/claims/manual-override
+ * Flag a claim for manual review.
+ * @param {string} claimId 
+ * @param {string} reason 
+ */
+export async function manualOverride(claimId, reason) {
+  try {
+    const { data } = await api.post('/api/claims/manual-override', {
+      claim_id: String(claimId),
+      reason,
+    })
+    return data
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * POST /api/claims/discard
+ * Discard an unprocessed claim analysis.
+ * @param {string} claimId 
+ */
+export async function discardClaim(claimId) {
+  try {
+    const { data } = await api.post('/api/claims/discard', {
+      claim_id: String(claimId),
+    })
+    return data
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * GET /api/analytics
+ * Fetch global analytics metrics and recent claims.
+ */
+export async function getAnalytics() {
+  try {
+    const { data } = await api.get('/api/analytics')
+    return data
+  } catch (error) {
+    throw error
+  }
+}
+
 export default api

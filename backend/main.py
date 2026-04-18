@@ -53,10 +53,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
-
-# ---------------------------------------------------------------------------
 # App
-# ---------------------------------------------------------------------------
+
 
 app = FastAPI(
     lifespan=lifespan,
@@ -71,28 +69,15 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-
-# ---------------------------------------------------------------------------
-# CORS middleware
-# ---------------------------------------------------------------------------
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",   # Vite default
-        "http://localhost:5174",   # Vite fallback (port 5173 in use)
-        "http://localhost:5175",   # Vite second fallback
-        "http://localhost:3000",   # CRA / alternate dev server
+        "http://localhost:5173",
+        "https://pdfscraper-frontend.vercel.app"  # your actual Vercel URL
     ],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ---------------------------------------------------------------------------
-# Routers
-# ---------------------------------------------------------------------------
 
 app.include_router(claims.router, prefix="/api/claims", tags=["Claims"])
 

@@ -18,8 +18,11 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import desc, select
 
-from models.db import AsyncSessionLocal, claims_history, engine, save_claim
-from models.schemas import ClaimResponse, ErrorResponse
+from models.db import AsyncSessionLocal, claims_history, engine, save_claim, update_claim_status
+from models.schemas import (
+    ClaimResponse, ErrorResponse, DispatchRequest, ActionResponse,
+    OverrideRequest, DiscardRequest, AnalyticsResponse
+)
 from services.claim_router import route_claim
 from services.field_validator import validate_fields
 from services.llm_extractor import extract_fields, detect_document_type
@@ -309,6 +312,97 @@ async def get_history() -> list[dict]:
             "claim_type":           row["claim_type"],
             "processed_at":         row["processed_at"].isoformat()
                                     if row["processed_at"] else None,
+            "status":               row["status"],
         }
         for row in rows
     ]
+
+@router.post("/dispatch", response_model=ActionResponse)
+async def dispatch_claim(req: DispatchRequest) -> ActionResponse:
+    from datetime import datetime, timezone
+    try:
+        await update_claim_status(int(req.claim_id), "dispatched")
+        return ActionResponse(
+            success=True, 
+            message="Claim dispatched", 
+            claim_id=req.claim_id, 
+            dispatched_at=datetime.now(timezone.utc).isoformat()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+@router.post("/manual-override", response_model=ActionResponse)
+async def manual_override(req: OverrideRequest) -> ActionResponse:
+    try:
+        await update_claim_status(int(req.claim_id), "manual_override")
+        return ActionResponse(success=True, message="Flagged for manual review", claim_id=req.claim_id)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+@router.post("/discard", response_model=ActionResponse)
+async def discard_claim(req: DiscardRequest) -> ActionResponse:
+    try:
+        await update_claim_status(int(req.claim_id), "discarded")
+        return ActionResponse(success=True, message="Claim discarded")
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+@router.get("/analytics", response_model=AnalyticsResponse)
+async def get_analytics() -> AnalyticsResponse:
+    try:
+        async with engine.connect() as conn:
+            from sqlalchemy import select, func
+            
+            # total claims
+            total_result = await conn.execute(select(func.count(claims_history.c.id)))
+            total_claims = total_result.scalar_one()
+            
+            # routes counts
+            routes_result = await conn.execute(
+                select(claims_history.c.recommended_route, func.count(claims_history.c.id))
+                .group_by(claims_history.c.recommended_route)
+            )
+            routes_data = dict(routes_result.all())
+            
+            def get_count(key_substring):
+                return sum(count for route, count in routes_data.items() if key_substring.lower() in str(route).lower())
+
+            fast_track_count = get_count("fast")
+            manual_review_count = get_count("manual")
+            investigation_count = get_count("investigation")
+            specialist_count = get_count("special")
+            standard_count = get_count("standard")
+            
+            # avg completeness score 
+            avg_result = await conn.execute(select(func.avg(100 - claims_history.c.missing_fields_count * 10)))
+            avg_score = avg_result.scalar_one() or 0.0
+            if avg_score < 0: avg_score = 0.0
+            if avg_score > 100: avg_score = 100.0
+            
+            # recent claims
+            recent_result = await conn.execute(
+                select(claims_history)
+                .order_by(desc(claims_history.c.processed_at))
+                .limit(5)
+            )
+            rows = recent_result.mappings().all()
+            recent_claims = [{
+                "id": row["id"],
+                "filename": row["filename"],
+                "recommended_route": row["recommended_route"],
+                "missing_fields_count": row["missing_fields_count"],
+                "status": row["status"]
+            } for row in rows]
+            
+            return AnalyticsResponse(
+                total_claims=total_claims,
+                fast_track_count=fast_track_count,
+                manual_review_count=manual_review_count,
+                investigation_count=investigation_count,
+                specialist_count=specialist_count,
+                standard_count=standard_count,
+                avg_completeness_score=float(avg_score),
+                recent_claims=recent_claims
+            )
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))

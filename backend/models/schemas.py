@@ -100,3 +100,36 @@ class ErrorResponse(BaseModel):
     """Standard error envelope returned on 4xx / 5xx responses."""
 
     detail: str = Field(..., description="Human-readable error message.")
+
+
+# ---------------------------------------------------------------------------
+# Action Endpoints
+# ---------------------------------------------------------------------------
+
+class DispatchRequest(BaseModel):
+    claim_id: str
+    route: str
+    extractedFields: dict[str, Any]
+
+class ActionResponse(BaseModel):
+    success: bool
+    message: str
+    claim_id: str | None = None
+    dispatched_at: str | None = None
+
+class OverrideRequest(BaseModel):
+    claim_id: str
+    reason: str
+
+class DiscardRequest(BaseModel):
+    claim_id: str
+
+class AnalyticsResponse(BaseModel):
+    total_claims: int
+    fast_track_count: int
+    manual_review_count: int
+    investigation_count: int
+    specialist_count: int
+    standard_count: int
+    avg_completeness_score: float
+    recent_claims: list[dict[str, Any]]

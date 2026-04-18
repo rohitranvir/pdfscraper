@@ -75,6 +75,7 @@ claims_history = Table(
     Column("estimated_damage",     Float,    nullable=True),
     Column("claim_type",           String,   nullable=True),
     Column("doc_type",             String,   nullable=True),
+    Column("status",               String,   nullable=False, default="processed"),
     Column(
         "processed_at",
         DateTime(timezone=True),
@@ -154,6 +155,7 @@ async def save_claim(data: dict) -> None:
         "estimated_damage":     _to_float(data.get("estimated_damage")),
         "claim_type":           data.get("claim_type"),
         "doc_type":             data.get("doc_type", "unknown"),
+        "status":               data.get("status", "processed"),
         "processed_at":         datetime.now(timezone.utc),
     }
 
@@ -169,6 +171,14 @@ async def save_claim(data: dict) -> None:
         record["estimated_damage"],
     )
 
+async def update_claim_status(claim_id: int, new_status: str) -> None:
+    from sqlalchemy import update
+    async with engine.begin() as conn:
+        await conn.execute(
+            update(claims_history)
+            .where(claims_history.c.id == claim_id)
+            .values(status=new_status)
+        )
 
 # ---------------------------------------------------------------------------
 # Internal helpers
